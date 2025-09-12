@@ -64,6 +64,7 @@ export interface ExtensionSettings {
   maxContextType: 'profile' | 'sampler' | 'custom';
   maxContextValue: number;
   maxResponseToken: number;
+  language?: 'en' | 'zh';
   contextToSend: ContextToSend;
   prompts: {
     stDescription: PromptSetting;
@@ -113,6 +114,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   maxContextType: 'profile',
   maxContextValue: 16384,
   maxResponseToken: 1024,
+  language: 'zh',
   contextToSend: {
     stDescription: true,
     messages: {

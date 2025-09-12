@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { STButton } from 'sillytavern-utils-lib/components';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { t } from '../i18n.js';
 
 /**
  * Props for the SelectEntriesPopup component.
@@ -97,21 +98,21 @@ export const SelectEntriesPopup = forwardRef<SelectEntriesPopupRef, SelectEntrie
 
     return (
       <div className="select-entries-popup">
-        <h3>Select Entries to Include</h3>
+        <h3>{t('selectEntriesToInclude')}</h3>
         <div className="controls">
           <input
             type="text"
             className="text_pole"
-            placeholder="Filter by name or lorebook..."
+            placeholder={t('filterPlaceholder')}
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
           />
-          <STButton onClick={handleSelectAllFiltered}>Select All (Filtered)</STButton>
-          <STButton onClick={handleDeselectAll}>Deselect All</STButton>
+          <STButton onClick={handleSelectAllFiltered}>{t('selectAllFiltered')}</STButton>
+          <STButton onClick={handleDeselectAll}>{t('deselectAll')}</STButton>
         </div>
         <div className="entry-list">
           {Object.keys(filteredEntries).length === 0 ? (
-            <p>No entries match your filter.</p>
+            <p>{t('noEntriesMatch')}</p>
           ) : (
             Object.entries(filteredEntries).map(([worldName, entries]) => (
               <div key={worldName} className="world-group">
@@ -125,7 +126,7 @@ export const SelectEntriesPopup = forwardRef<SelectEntriesPopupRef, SelectEntrie
                           checked={selectedIds.has(`${worldName}::${entry.uid}`)}
                           onChange={() => handleToggleSelection(worldName, entry.uid)}
                         />
-                        {entry.comment || `Entry ${entry.uid}`}
+                        {entry.comment || t('entryN', { uid: entry.uid })}
                       </label>
                     </li>
                   ))}

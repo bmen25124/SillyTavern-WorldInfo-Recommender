@@ -101,6 +101,19 @@ dialog:has(.select-entries-popup) {
   margin-bottom: 0;
   border: 1px solid var(--SmartThemeBorderColor);
 }
+#worldInfoRecommenderPopup .menu_button {
+  background-color: var(--grey30);
+  color: var(--SmartThemeBodyColor);
+  border: 1px solid var(--SmartThemeBorderColor);
+}
+#worldInfoRecommenderPopup .menu_button:hover {
+  background-color: color-mix(in srgb, var(--grey30) 85%, white);
+}
+#worldInfoRecommenderPopup .menu_button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 #worldInfoRecommenderPopup .message-options .message-input {
   width: 50px;
   margin-left: 5px;
@@ -168,12 +181,18 @@ dialog:has(.select-entries-popup) {
   height: fit-content;
 }
 #worldInfoRecommenderPopup .entry .menu .add,
-#worldInfoRecommenderPopup .entry .menu .continue {
-  background-color: var(--active);
+#worldInfoRecommenderPopup .entry .menu .continue,
+#worldInfoRecommenderPopup .entry .menu .revise,
+#worldInfoRecommenderPopup .entry .menu .compare,
+#worldInfoRecommenderPopup .entry .menu .edit {
+  background-color: var(--grey30);
 }
 #worldInfoRecommenderPopup .entry .menu .add:hover,
-#worldInfoRecommenderPopup .entry .menu .continue:hover {
-  background-color: color-mix(in srgb, var(--active) 85%, white);
+#worldInfoRecommenderPopup .entry .menu .continue:hover,
+#worldInfoRecommenderPopup .entry .menu .revise:hover,
+#worldInfoRecommenderPopup .entry .menu .compare:hover,
+#worldInfoRecommenderPopup .entry .menu .edit:hover {
+  background-color: color-mix(in srgb, var(--grey30) 85%, white);
 }
 #worldInfoRecommenderPopup .entry .menu .blacklist {
   background-color: var(--grey50);
@@ -182,10 +201,10 @@ dialog:has(.select-entries-popup) {
   background-color: var(--grey70);
 }
 #worldInfoRecommenderPopup .entry .menu .remove {
-  background-color: var(--warning);
+  background-color: var(--grey50);
 }
 #worldInfoRecommenderPopup .entry .menu .remove:hover {
-  background-color: color-mix(in srgb, var(--warning) 85%, white);
+  background-color: var(--grey70);
 }
 #worldInfoRecommenderPopup .entry .comment {
   margin-top: 0;
@@ -208,11 +227,11 @@ dialog:has(.select-entries-popup) {
   margin-bottom: 15px;
 }
 #worldInfoRecommenderPopup .actions .menu_button {
-  background-color: var(--active);
+  background-color: var(--grey30);
   min-width: 90px;
 }
 #worldInfoRecommenderPopup .actions .menu_button:hover {
-  background-color: color-mix(in srgb, var(--active) 85%, white);
+  background-color: color-mix(in srgb, var(--grey30) 85%, white);
 }
 #worldInfoRecommenderPopup .actions .menu_button:disabled {
   opacity: 0.5;

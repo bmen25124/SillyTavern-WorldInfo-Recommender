@@ -10,6 +10,7 @@ import {
 import { st_runRegexScript } from 'sillytavern-utils-lib/config';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { t } from '../i18n.js';
 
 const globalContext = SillyTavern.getContext();
 
@@ -123,24 +124,24 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
   // The component does not render its own buttons, as they are provided by the parent <Popup>.
   return (
     <div className="edit-popup" style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-      <h3>Edit Suggestion</h3>
+      <h3>{t('editSuggestion')}</h3>
       <div>
-        <label>Title</label>
+        <label>{t('title')}</label>
         <input type="text" className="text_pole" value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
       <div>
-        <label>Keywords (comma-separated)</label>
+        <label>{t('keywordsComma')}</label>
         <input type="text" className="text_pole" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
       </div>
       <div>
-        <h4>Apply Regex Scripts</h4>
+        <h4>{t('applyRegexScripts')}</h4>
         <STFancyDropdown
           items={fancyDropdownItems}
           value={selectedRegexIds}
           onChange={handleRegexSelectionChange}
           multiple
           enableSearch
-          placeholder="Select regex scripts..."
+          placeholder={t('selectRegexPlaceholder')}
         />
         {regexListItems.length > 0 && (
           <STSortableList
@@ -153,13 +154,13 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
         )}
       </div>
       <STButton onClick={handleSimulate} className="menu_button">
-        Simulate Regex
+        {t('simulateRegex')}
       </STButton>
       <STTextarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         rows={8}
-        placeholder="Resulting content..."
+        placeholder={t('resultingContent')}
       />
     </div>
   );

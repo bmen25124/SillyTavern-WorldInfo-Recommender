@@ -22,6 +22,7 @@ import {
   SYSTEM_PROMPT_KEYS,
 } from '../settings.js';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
+import { t } from '../i18n.js';
 
 const globalContext = SillyTavern.getContext();
 
@@ -80,9 +81,9 @@ export const WorldInfoRecommenderSettings: FC = () => {
         enabled: prompt.enabled,
         selectValue: prompt.role,
         selectOptions: [
-          { value: 'user', label: 'User' },
-          { value: 'assistant', label: 'Assistant' },
-          { value: 'system', label: 'System' },
+          { value: 'user', label: t('roleUser') },
+          { value: 'assistant', label: t('roleAssistant') },
+          { value: 'system', label: t('roleSystem') },
         ],
       };
     });
@@ -130,7 +131,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
   };
 
   const handleRestoreMainContextDefault = async () => {
-    const confirm = await globalContext.Popup.show.confirm('Restore default', 'Are you sure?');
+    const confirm = await globalContext.Popup.show.confirm(t('restoreDefault'), t('areYouSure'));
     if (!confirm) return;
 
     updateAndRefresh((s) => {
@@ -271,9 +272,9 @@ export const WorldInfoRecommenderSettings: FC = () => {
 
   const handleRestoreSystemPromptDefault = async () => {
     const prompt = settings.prompts[selectedSystemPrompt];
-    if (!prompt) return st_echo('warning', 'No prompt selected.');
+    if (!prompt) return st_echo('warning', t('prompt'));
 
-    const confirm = await globalContext.Popup.show.confirm('Restore Default', `Restore default for "${prompt.label}"?`);
+    const confirm = await globalContext.Popup.show.confirm(t('restoreDefault'), `${t('restoreDefault')} "${prompt.label}"?`);
     if (confirm) {
       updateAndRefresh((s) => {
         // Create a new prompts object with the restored content.
@@ -290,12 +291,12 @@ export const WorldInfoRecommenderSettings: FC = () => {
 
   // --- Reset Handler ---
   const handleResetEverything = async () => {
-    const confirm = await globalContext.Popup.show.confirm('Reset Everything', 'Are you sure? This cannot be undone.');
+    const confirm = await globalContext.Popup.show.confirm(t('resetEverything'), t('areYouSureLong'));
     if (confirm) {
       settingsManager.resetSettings(); // This saves automatically
       // forceUpdate is sufficient here because the next render will get a completely new settings object.
       forceUpdate();
-      st_echo('success', 'Settings reset. The UI has been updated.');
+      st_echo('success', t('settingsResetUIUpdated'));
     }
   };
 
@@ -307,15 +308,15 @@ export const WorldInfoRecommenderSettings: FC = () => {
     <div className="world-info-recommender-settings">
       <div style={{ marginTop: '10px' }}>
         <div className="title_restorable">
-          <span>Main Context Template</span>
+          <span>{t('mainContextTemplate')}</span>
           <STButton
             className="fa-solid fa-undo"
-            title="Restore main context template to default"
+            title={t('restoreDefaultTitle')}
             onClick={handleRestoreMainContextDefault}
           />
         </div>
         <STPresetSelect
-          label="Template"
+          label={t('template')}
           items={mainContextPresetItems}
           value={settings.mainContextTemplatePreset}
           readOnlyValues={['default']}
@@ -339,17 +340,17 @@ export const WorldInfoRecommenderSettings: FC = () => {
 
       <div style={{ marginTop: '10px' }}>
         <div className="title_restorable">
-          <span>Prompt Templates</span>
+          <span>{t('promptTemplates')}</span>
           {isDefaultSystemPromptSelected && (
             <STButton
               className="fa-solid fa-undo"
-              title="Restore selected prompt to default"
+              title={t('restoreSelectedPrompt')}
               onClick={handleRestoreSystemPromptDefault}
             />
           )}
         </div>
         <STPresetSelect
-          label="Prompt"
+          label={t('prompt')}
           items={systemPromptItems}
           value={selectedSystemPrompt}
           readOnlyValues={SYSTEM_PROMPT_KEYS}
@@ -364,7 +365,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
         <STTextarea
           value={selectedPromptContent}
           onChange={handleSystemPromptContentChange}
-          placeholder="Edit the selected system prompt template here..."
+          placeholder={t('editPromptPlaceholder')}
           rows={6}
           style={{ marginTop: '5px', width: '100%' }}
         />
@@ -372,10 +373,31 @@ export const WorldInfoRecommenderSettings: FC = () => {
 
       <hr style={{ margin: '15px 0' }} />
 
+      {/* Language selector */}
+      <div style={{ marginTop: '10px' }}>
+        <label>
+          {t('language')}
+          <select
+            className="text_pole"
+            style={{ marginLeft: '10px' }}
+            value={settings.language ?? 'zh'}
+            onChange={(e) =>
+              updateAndRefresh((s) => {
+                // @ts-ignore
+                s.language = (e.target.value as any) === 'en' ? 'en' : 'zh';
+              })
+            }
+          >
+            <option value="zh">{t('languageChinese')}</option>
+            <option value="en">{t('languageEnglish')}</option>
+          </select>
+        </label>
+      </div>
+
       <div style={{ textAlign: 'center', marginTop: '15px' }}>
         <STButton className="danger_button" style={{ width: 'auto' }} onClick={handleResetEverything}>
-          <i style={{ marginRight: '10px' }} className="fa-solid fa-triangle-exclamation" />I messed up, reset
-          everything
+          <i style={{ marginRight: '10px' }} className="fa-solid fa-triangle-exclamation" />
+          {t('resetEverythingLong')}
         </STButton>
       </div>
     </div>
