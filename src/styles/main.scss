@@ -103,6 +103,23 @@ dialog:has(.select-entries-popup) {
         border: 1px solid var(--SmartThemeBorderColor);
     }
 
+    // Neutralize button colors within this extension (black/white/gray palette)
+    .menu_button {
+        background-color: var(--grey30);
+        color: var(--SmartThemeBodyColor);
+        border: 1px solid var(--SmartThemeBorderColor);
+
+        &:hover {
+            background-color: color-mix(in srgb, var(--grey30) 85%, white);
+        }
+
+        &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+    }
+
     .message-options {
         .message-input {
             width: 50px;
@@ -177,11 +194,14 @@ dialog:has(.select-entries-popup) {
             }
 
             .add,
-            .continue {
-                background-color: var(--active);
+            .continue,
+            .revise,
+            .compare,
+            .edit {
+                background-color: var(--grey30);
 
                 &:hover {
-                    background-color: color-mix(in srgb, var(--active) 85%, white);
+                    background-color: color-mix(in srgb, var(--grey30) 85%, white);
                 }
             }
 
@@ -194,10 +214,10 @@ dialog:has(.select-entries-popup) {
             }
 
             .remove {
-                background-color: var(--warning);
+                background-color: var(--grey50);
 
                 &:hover {
-                    background-color: color-mix(in srgb, var(--warning) 85%, white);
+                    background-color: var(--grey70);
                 }
             }
         }
@@ -227,11 +247,11 @@ dialog:has(.select-entries-popup) {
         margin-bottom: 15px;
 
         .menu_button {
-            background-color: var(--active);
+            background-color: var(--grey30);
             min-width: 90px;
 
             &:hover {
-                background-color: color-mix(in srgb, var(--active) 85%, white);
+                background-color: color-mix(in srgb, var(--grey30) 85%, white);
             }
 
             &:disabled {
