@@ -6,6 +6,7 @@ import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { CompareEntryPopup } from './CompareEntryPopup.js';
 import { EditEntryPopup, EditEntryPopupRef } from './EditEntryPopup.js';
+import { t } from '../i18n.js';
 
 const converter = new showdown.Converter();
 
@@ -102,26 +103,26 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
             ))}
           </select>
           <STButton onClick={handleAddClick} disabled={isAdding || isActing} className="menu_button interactable add">
-            {isUpdate ? 'Update' : 'Add'}
+            {isUpdate ? t('update') : t('add')}
           </STButton>
           <STButton
             onClick={handleContinueClick}
             disabled={isActing}
             className="menu_button interactable continue"
-            title="Continue writing this entry. You can provide instructions in the textbox below."
+            title={t('continueTitle')}
           >
-            {isContinuing ? '...' : 'Continue'}
+            {isContinuing ? '...' : t('continue')}
           </STButton>
           <STButton
             onClick={handleReviseClick}
             disabled={isActing}
             className="menu_button interactable revise"
-            title="Request changes to this entry. Provide instructions in the textbox below."
+            title={t('reviseTitle')}
           >
-            {isRevising ? '...' : 'Revise'}
+            {isRevising ? '...' : t('revise')}
           </STButton>
           <STButton onClick={() => setIsEditing(true)} disabled={isActing} className="menu_button interactable edit">
-            Edit
+            {t('edit')}
           </STButton>
           {isUpdate && (
             <STButton
@@ -129,7 +130,7 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
               disabled={isActing}
               className="menu_button interactable compare"
             >
-              Compare
+              {t('compare')}
             </STButton>
           )}
           <STButton
@@ -137,14 +138,14 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
             disabled={isActing}
             className="menu_button interactable blacklist"
           >
-            Blacklist
+            {t('blacklist')}
           </STButton>
           <STButton
             onClick={() => onRemove(entry, initialWorldName, false)}
             disabled={isActing}
             className="menu_button interactable remove"
           >
-            Remove
+            {t('remove')}
           </STButton>
         </div>
         <h4 className="comment">{entry.comment}</h4>
@@ -154,7 +155,7 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
           <STTextarea
             value={updatePrompt}
             onChange={(e) => setUpdatePrompt(e.target.value)}
-            placeholder="Optional instructions to continue or revise this entry. Then press 'Continue' or 'Revise'."
+            placeholder={t('continuePlaceholder')}
             rows={2}
             style={{ width: '100%' }}
           />

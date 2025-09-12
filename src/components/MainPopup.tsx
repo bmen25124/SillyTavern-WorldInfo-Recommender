@@ -31,6 +31,7 @@ import { Handlebars } from '../../../../../lib.js';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
 import { SelectEntriesPopup, SelectEntriesPopupRef } from './SelectEntriesPopup.js';
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
+import { t } from '../i18n.js';
 
 if (!Handlebars.helpers['join']) {
   Handlebars.registerHelper('join', function (array: any, separator: any) {
@@ -241,14 +242,14 @@ export const MainPopup: FC = () => {
 
   const handleGeneration = useCallback(
     async (continueFrom?: { worldName: string; entry: WIEntry; prompt: string; mode: 'continue' | 'revise' }) => {
-      if (!settings.profileId) return st_echo('warning', 'Please select a connection profile.');
+      if (!settings.profileId) return st_echo('warning', t('pleaseSelectProfile'));
 
       // Determine the prompt: use the specific one from the entry if provided, otherwise use the global one.
       const userPrompt = continueFrom?.prompt ?? settings.promptPresets[settings.promptPreset].content;
 
       // For a global generation, the prompt must not be empty. For entry-specific actions, it can be.
       if (!continueFrom && !userPrompt) {
-        return st_echo('warning', 'Please enter a prompt.');
+        return st_echo('warning', t('pleaseEnterPrompt'));
       }
 
       setIsGenerating(true);
@@ -364,7 +365,7 @@ export const MainPopup: FC = () => {
             });
           }
         } else {
-          st_echo('warning', 'No results from AI');
+          st_echo('warning', t('noResultsFromAI'));
         }
       } catch (error: any) {
         console.error(error);
@@ -381,7 +382,7 @@ export const MainPopup: FC = () => {
     async (entry: WIEntry, worldName: string, selectedTargetWorld: string) => {
       try {
         const status = await addEntry(entry, selectedTargetWorld);
-        st_echo('success', status === 'added' ? 'Entry added' : 'Entry updated');
+        st_echo('success', status === 'added' ? t('entryAdded') : t('entryUpdated'));
         // Remove from suggested list
         setSession((prev) => {
           const newSuggested = { ...prev.suggestedEntries };
@@ -394,7 +395,7 @@ export const MainPopup: FC = () => {
         });
       } catch (error: any) {
         console.error(error);
-        st_echo('error', `Failed to add entry: ${error.message}`);
+        st_echo('error', t('failedToAddEntry', { message: error.message }));
       }
     },
     [addEntry],
@@ -405,8 +406,8 @@ export const MainPopup: FC = () => {
     if (totalEntries === 0) return st_echo('warning', 'No entries to add.');
 
     const confirm = await globalContext.Popup.show.confirm(
-      'Add All',
-      `Are you sure you want to add/update all ${totalEntries} suggested entries?`,
+      t('confirmAddAllTitle'),
+      t('confirmAddAllText', { count: totalEntries }),
     );
     if (!confirm) return;
 
@@ -430,7 +431,7 @@ export const MainPopup: FC = () => {
         else updatedCount++;
         modifiedWorlds.add(worldName);
       } catch (error) {
-        st_echo('error', `Failed to process entry: ${entry.comment}`);
+        st_echo('error', t('failedToProcessEntry', { comment: entry.comment ?? '' }));
       }
     }
 
@@ -440,19 +441,19 @@ export const MainPopup: FC = () => {
         await globalContext.saveWorldInfo(worldName, finalFormat);
         globalContext.reloadWorldInfoEditor(worldName, true);
       } catch (error) {
-        st_echo('error', `Failed to save world: ${worldName}`);
+        st_echo('error', t('failedToSaveWorld', { worldName }));
       }
     }
 
     setSession((prev) => ({ ...prev, suggestedEntries: {} }));
-    st_echo('success', `Processed ${addedCount} new and ${updatedCount} updated entries.`);
+    st_echo('success', t('processedSummary', { added: addedCount, updated: updatedCount }));
     setIsGenerating(false);
   };
 
   const handleReset = async () => {
     const confirm = await globalContext.Popup.show.confirm(
-      'Reset',
-      'Clear all suggestions and reset lorebook selection?',
+      t('confirmResetTitle'),
+      t('confirmResetText'),
     );
     if (confirm) {
       setSession((prev) => ({
@@ -462,7 +463,7 @@ export const MainPopup: FC = () => {
         selectedWorldNames: getAvatar() ? [...allWorldNames] : [],
         selectedEntryUids: {},
       }));
-      st_echo('success', 'Reset successful');
+      st_echo('success', t('resetSuccessful'));
     }
   };
 
@@ -518,7 +519,7 @@ export const MainPopup: FC = () => {
 
   // --- Render ---
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div>{t('loading')}</div>;
   }
 
   const suggestedEntriesList = Object.entries(session.suggestedEntries).flatMap(([worldName, entries]) =>
@@ -528,12 +529,12 @@ export const MainPopup: FC = () => {
   return (
     <>
       <div id="worldInfoRecommenderPopup">
-        <h2>World Info Recommender</h2>
+        <h2>{t('appTitle')}</h2>
         <div className="container">
           {/* Left Column */}
           <div className="column">
             <div className="card">
-              <h3>Connection Profile</h3>
+              <h3>{t('connectionProfile')}</h3>
               <STConnectionProfileSelect
                 initialSelectedProfileId={settings.profileId}
                 // @ts-ignore
@@ -542,7 +543,7 @@ export const MainPopup: FC = () => {
             </div>
 
             <div className="card">
-              <h3>Context to Send</h3>
+              <h3>{t('contextToSend')}</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                 <label className="checkbox_label">
                   <input
@@ -550,12 +551,12 @@ export const MainPopup: FC = () => {
                     checked={settings.contextToSend.stDescription}
                     onChange={(e) => updateContextToSend('stDescription', e.target.checked)}
                   />
-                  Description of SillyTavern and Lorebook
+                  {t('stDescription')}
                 </label>
                 {/* Message Options */}
                 {avatarKey != '_global' && (
                   <div className="message-options">
-                    <h4>Messages to Include</h4>
+                    <h4>{t('messagesToInclude')}</h4>
                     <select
                       className="text_pole"
                       value={settings.contextToSend.messages.type}
@@ -566,17 +567,17 @@ export const MainPopup: FC = () => {
                         })
                       }
                     >
-                      <option value="none">None</option>
-                      <option value="all">All Messages</option>
-                      <option value="first">First X Messages</option>
-                      <option value="last">Last X Messages</option>
-                      <option value="range">Range</option>
+                      <option value="none">{t('none')}</option>
+                      <option value="all">{t('allMessages')}</option>
+                      <option value="first">{t('firstXMessages')}</option>
+                      <option value="last">{t('lastXMessages')}</option>
+                      <option value="range">{t('range')}</option>
                     </select>
 
                     {settings.contextToSend.messages.type === 'first' && (
                       <div style={{ marginTop: '10px' }}>
                         <label>
-                          First{' '}
+                          {t('first')}{' '}
                           <input
                             type="number"
                             className="text_pole small message-input"
@@ -589,14 +590,14 @@ export const MainPopup: FC = () => {
                               })
                             }
                           />{' '}
-                          Messages
+                          {t('messages')}
                         </label>
                       </div>
                     )}
                     {settings.contextToSend.messages.type === 'last' && (
                       <div style={{ marginTop: '10px' }}>
                         <label>
-                          Last{' '}
+                          {t('last')}{' '}
                           <input
                             type="number"
                             className="text_pole small message-input"
@@ -609,14 +610,14 @@ export const MainPopup: FC = () => {
                               })
                             }
                           />{' '}
-                          Messages
+                          {t('messages')}
                         </label>
                       </div>
                     )}
                     {settings.contextToSend.messages.type === 'range' && (
                       <div style={{ marginTop: '10px' }}>
                         <label>
-                          Range:{' '}
+                          {t('rangeColon')}{' '}
                           <input
                             type="number"
                             className="text_pole small message-input"
@@ -633,7 +634,7 @@ export const MainPopup: FC = () => {
                               })
                             }
                           />{' '}
-                          to{' '}
+                          {t('to')}{' '}
                           <input
                             type="number"
                             className="text_pole small message-input"
@@ -662,12 +663,12 @@ export const MainPopup: FC = () => {
                     checked={settings.contextToSend.charCard}
                     onChange={(e) => updateContextToSend('charCard', e.target.checked)}
                   />
-                  Char Card
+                  {t('charCard')}
                 </label>
                 {groupMembers.length > 0 && (
                   <div>
-                    <h4>Select Character</h4>
-                    <select className="text_pole" title="Select character for your group.">
+                    <h4>{t('selectCharacter')}</h4>
+                    <select className="text_pole" title={t('selectCharacterTitle')}>
                       {groupMembers.map((member) => (
                         <option key={member.avatar} value={member.avatar}>
                           {member.name}
@@ -682,7 +683,7 @@ export const MainPopup: FC = () => {
                     checked={settings.contextToSend.authorNote}
                     onChange={(e) => updateContextToSend('authorNote', e.target.checked)}
                   />{' '}
-                  Author Note
+                  {t('authorNote')}
                 </label>
                 <label className="checkbox_label">
                   <input
@@ -690,10 +691,10 @@ export const MainPopup: FC = () => {
                     checked={settings.contextToSend.worldInfo}
                     onChange={(e) => updateContextToSend('worldInfo', e.target.checked)}
                   />{' '}
-                  World Info
+                  {t('worldInfo')}
                 </label>
                 <div>
-                  <h4>Lorebooks to Include</h4>
+                  <h4>{t('lorebooksToInclude')}</h4>
                   <STFancyDropdown
                     items={worldInfoDropdownItems}
                     value={session.selectedWorldNames}
@@ -714,10 +715,10 @@ export const MainPopup: FC = () => {
                     <STButton
                       className="menu_button"
                       onClick={() => setIsSelectingEntries(true)}
-                      title="Select specific entries from the chosen lorebooks"
+                      title={t('selectEntriesTitle')}
                     >
                       <i className="fa-solid fa-list-check"></i>
-                      Select Entries
+                      {t('selectEntries')}
                     </STButton>
                     <span>
                       {totalSelectedEntries > 0 ? `${totalSelectedEntries} selected` : 'All entries included'}
@@ -730,23 +731,23 @@ export const MainPopup: FC = () => {
                     checked={settings.contextToSend.suggestedEntries}
                     onChange={(e) => updateContextToSend('suggestedEntries', e.target.checked)}
                   />{' '}
-                  Existing Suggestions
+                  {t('existingSuggestions')}
                 </label>
               </div>
             </div>
 
             <div className="card">
               <label>
-                Max Context
+                {t('maxContext')}
                 <select
                   className="text_pole"
-                  title="Select Max Context Type"
+                  title={t('maxContext')}
                   value={settings.maxContextType}
                   onChange={(e) => updateSetting('maxContextType', e.target.value as any)}
                 >
-                  <option value="profile">Use profile preset</option>
-                  <option value="sampler">Use active preset in sampler settings</option>
-                  <option value="custom">Custom</option>
+                  <option value="profile">{t('maxContextProfile')}</option>
+                  <option value="sampler">{t('maxContextSampler')}</option>
+                  <option value="custom">{t('maxContextCustom')}</option>
                 </select>
               </label>
 
@@ -757,7 +758,7 @@ export const MainPopup: FC = () => {
                     className="text_pole"
                     min="1"
                     step="1"
-                    placeholder="Enter max tokens"
+                    placeholder={t('maxResponseTokens')}
                     value={settings.maxContextValue}
                     onChange={(e) => updateSetting('maxContextValue', parseInt(e.target.value) || 2048)}
                   />
@@ -765,13 +766,13 @@ export const MainPopup: FC = () => {
               )}
 
               <label style={{ display: 'block', marginTop: '10px' }}>
-                Max Response Tokens
+                {t('maxResponseTokens')}
                 <input
                   type="number"
                   className="text_pole"
                   min="1"
                   step="1"
-                  placeholder="Enter max response tokens"
+                  placeholder={t('maxResponseTokens')}
                   value={settings.maxResponseToken}
                   onChange={(e) => updateSetting('maxResponseToken', parseInt(e.target.value) || 256)}
                 />
@@ -779,9 +780,9 @@ export const MainPopup: FC = () => {
             </div>
 
             <div className="card">
-              <h3>Your Prompt</h3>
+              <h3>{t('yourPrompt')}</h3>
               <STPresetSelect
-                label="Prompt Preset"
+                label={t('promptPreset')}
                 items={promptPresetItems}
                 value={settings.promptPreset}
                 readOnlyValues={['default']}
@@ -809,7 +810,7 @@ export const MainPopup: FC = () => {
                     updateSetting('promptPresets', newPresets);
                   }
                 }}
-                placeholder="e.g., 'Suggest entries for places {{user}} visited.'"
+                placeholder={t('promptPlaceholder')}
                 rows={4}
                 style={{ marginTop: '5px', width: '100%' }}
               />
@@ -819,7 +820,7 @@ export const MainPopup: FC = () => {
                 className="menu_button interactable"
                 style={{ marginTop: '5px' }}
               >
-                {isGenerating ? 'Generating...' : 'Send Prompt'}
+                {isGenerating ? t('generating') : t('sendPrompt')}
               </STButton>
             </div>
           </div>
@@ -827,21 +828,21 @@ export const MainPopup: FC = () => {
           {/* Right Column */}
           <div className="wide-column">
             <div className="card">
-              <h3>Suggested Entries</h3>
+              <h3>{t('suggestedEntries')}</h3>
               <div className="actions">
                 <STButton
                   onClick={handleAddAll}
                   disabled={isGenerating || suggestedEntriesList.length === 0}
                   className="menu_button interactable"
                 >
-                  Add All
+                  {t('addAll')}
                 </STButton>
                 <STButton onClick={handleReset} disabled={isGenerating} className="menu_button interactable">
-                  Reset
+                  {t('reset')}
                 </STButton>
               </div>
               <div>
-                {suggestedEntriesList.length === 0 && <p>No suggestions yet. Send a prompt to get started!</p>}
+                {suggestedEntriesList.length === 0 && <p>{t('noSuggestions')}</p>}
                 {suggestedEntriesList.map(({ worldName, entry }) => (
                   <SuggestedEntry
                     key={`${worldName}-${entry.uid}-${entry.comment}`}
