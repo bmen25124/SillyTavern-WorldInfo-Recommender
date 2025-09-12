@@ -1,6 +1,7 @@
 import { FC, useMemo } from 'react';
 import { diffWords } from 'diff';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { t } from '../i18n.js';
 
 interface CompareEntryPopupProps {
   originalEntry: WIEntry;
@@ -37,11 +38,11 @@ export const CompareEntryPopup: FC<CompareEntryPopupProps> = ({ originalEntry, n
 
   return (
     <div className="compare-popup" style={{ padding: '10px' }}>
-      <h3>Compare Changes</h3>
+      <h3>{t('compareChanges')}</h3>
       <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
         {/* Original Content Column */}
         <div style={{ flex: '1' }}>
-          <h4>Original Content</h4>
+          <h4>{t('originalContent')}</h4>
           <div
             style={{
               whiteSpace: 'pre-wrap',
@@ -58,7 +59,7 @@ export const CompareEntryPopup: FC<CompareEntryPopupProps> = ({ originalEntry, n
 
         {/* New Content Column */}
         <div style={{ flex: '1' }}>
-          <h4>New Content (Suggestion)</h4>
+          <h4>{t('newContentSuggestion')}</h4>
           <div
             style={{
               whiteSpace: 'pre-wrap',
