@@ -20,7 +20,7 @@ export const PopupManager = () => {
 
   return (
     <Popup
-      content={<MainPopup />}
+      content={<MainPopup onClose={closePopup} />}
       type={POPUP_TYPE.DISPLAY}
       onComplete={closePopup} // The popup component now controls closing
       options={{

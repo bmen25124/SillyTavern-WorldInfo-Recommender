@@ -44,10 +44,18 @@ const globalContext = SillyTavern.getContext();
 const getAvatar = () => (this_chid ? st_getCharaFilename(this_chid) : selected_group);
 
 /**
+ * The props for the MainPopup component.
+ */
+interface MainPopupProps {
+  onClose: () => void;
+}
+
+
+/**
  * A React component for the main World Info Recommender popup UI.
  * This component replaces the vanilla TS popup script.
  */
-export const MainPopup: FC = () => {
+export const MainPopup: FC<MainPopupProps> = ({ onClose }) => {
   // --- State Management ---
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
@@ -223,11 +231,26 @@ export const MainPopup: FC = () => {
         const stFormat = { entries: Object.fromEntries(worldInfoCopy[selectedWorldName].map((e) => [e.uid, e])) };
         const newEntry = st_createWorldInfoEntry(selectedWorldName, stFormat);
         if (!newEntry) throw new Error('Failed to create new World Info entry.');
-        targetEntry = newEntry;
+        targetEntry = newEntry;      
+        if (worldInfoCopy[selectedWorldName].length > 0) {        
+          //@ts-ignore
+          const maxOrder = Math.max(...worldInfoCopy[selectedWorldName].map((e) => e.order ?? 0));
+          console.log('New max order:', maxOrder);
+          //@ts-ignore
+          targetEntry.order = maxOrder + 1;
+        }
         worldInfoCopy[selectedWorldName].push(targetEntry);
       }
 
-      Object.assign(targetEntry, { key: entry.key, content: entry.content, comment: entry.comment });
+      Object.assign(targetEntry, {
+        key: entry.key,
+        content: `# ${entry.comment}\n\n${entry.content
+          .split('\n')
+          .map((line) => line.trim())
+          .join('\n')}`,
+        comment: entry.comment,
+        constant: true,
+      });
       setEntriesGroupByWorldName(worldInfoCopy);
 
       if (!skipSave) {
@@ -401,55 +424,6 @@ export const MainPopup: FC = () => {
     },
     [addEntry],
   );
-
-  const handleAddAll = async () => {
-    const totalEntries = Object.values(session.suggestedEntries).flat().length;
-    if (totalEntries === 0) return st_echo('warning', 'No entries to add.');
-
-    const confirm = await globalContext.Popup.show.confirm(
-      'Add All',
-      `Are you sure you want to add/update all ${totalEntries} suggested entries?`,
-    );
-    if (!confirm) return;
-
-    setIsGenerating(true);
-    let addedCount = 0;
-    let updatedCount = 0;
-    const modifiedWorlds = new Set<string>();
-    const entriesToAdd: { worldName: string; entry: WIEntry }[] = [];
-
-    Object.entries(session.suggestedEntries).forEach(([worldName, entries]) => {
-      entries.forEach((entry) => {
-        const targetWorldName = allWorldNames.includes(worldName) ? worldName : (allWorldNames[0] ?? '');
-        if (targetWorldName) entriesToAdd.push({ worldName: targetWorldName, entry });
-      });
-    });
-
-    for (const { worldName, entry } of entriesToAdd) {
-      try {
-        const status = await addEntry(entry, worldName, true);
-        if (status === 'added') addedCount++;
-        else updatedCount++;
-        modifiedWorlds.add(worldName);
-      } catch (error) {
-        st_echo('error', `Failed to process entry: ${entry.comment}`);
-      }
-    }
-
-    for (const worldName of modifiedWorlds) {
-      try {
-        const finalFormat = { entries: Object.fromEntries(entriesGroupByWorldName[worldName].map((e) => [e.uid, e])) };
-        await globalContext.saveWorldInfo(worldName, finalFormat);
-        globalContext.reloadWorldInfoEditor(worldName, true);
-      } catch (error) {
-        st_echo('error', `Failed to save world: ${worldName}`);
-      }
-    }
-
-    setSession((prev) => ({ ...prev, suggestedEntries: {} }));
-    st_echo('success', `Processed ${addedCount} new and ${updatedCount} updated entries.`);
-    setIsGenerating(false);
-  };
 
   const handleReset = async () => {
     const confirm = await globalContext.Popup.show.confirm(
@@ -856,6 +830,13 @@ export const MainPopup: FC = () => {
               >
                 {isGenerating ? 'Generating...' : 'Send Prompt'}
               </STButton>
+              <STButton
+                onClick={onClose}
+                className="menu_button interactable"
+                style={{ marginTop: '5px' }}
+              >
+                Close
+              </STButton>
             </div>
           </div>
 
@@ -864,13 +845,6 @@ export const MainPopup: FC = () => {
             <div className="card">
               <h3>Suggested Entries</h3>
               <div className="actions">
-                <STButton
-                  onClick={handleAddAll}
-                  disabled={isGenerating || suggestedEntriesList.length === 0}
-                  className="menu_button interactable"
-                >
-                  Add All
-                </STButton>
                 <STButton
                   onClick={() => setIsImporting(true)}
                   disabled={isGenerating}
