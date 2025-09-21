@@ -1,45 +1,59 @@
-# SillyTavern World Info Recommender (WREC)
+# 📖 SillyTavern World Info Recommender & Lorebook Editor+
 
-## Overview
+👤 **Made by:** `bmen25124`
+🛠️ **Lorebook Additions & Mods by:** `Kawhi42 (terrible-wizard)`
 
-A [SillyTavern](https://docs.sillytavern.app/) extension that helps you manage [world info](https://docs.sillytavern.app/usage/core-concepts/worldinfo/) based on the current context with LLMs using [connection profiles](https://docs.sillytavern.app/usage/core-concepts/connection-profiles/).
-
-![popup](images/popup.png)
-
----
-
-![settings](images/settings.png)
+An extension for **SillyTavern** that helps you manage World Info dynamically based on the current context with LLMs using connection profiles.
 
 ---
 
-**If you are using a _Text Completion_ profile, make sure your profile contains API, preset, model, system prompt, instruct template, and  context template.**
+## ✨ New Features & Improvements (by Kawhi42)
 
-**If you are using a _Chat Completion_ profile; API, settings, model would be enough.**
+### 🔮 World Info Recommender & Lorebook Editor+
+
+* 🆕 **New Layout:** cleaner, easier to use
+* 👀 **Prompt Previewer:** see your prompt before it’s sent to the LLM
+* 🧩 **Prompt Injection Support and Chat History Prompt Orginizing support:** found in *Extension Settings* (works with Qvink Memory for message-by-message summaries; choose where injections appear in prompt; you can now add separators or notes in chat history prompt)
+* ✏️ **Change Entry Titles:** entries are UID-based, so renaming won’t duplicate them
+
+<img width="2912" height="1792" alt="2025-09-21_14-35-04" src="https://github.com/user-attachments/assets/4835e02d-b9c7-433f-95b7-afec8b3e9d31" />
 
 ---
 
-## Installation
+### 📚 Lorebook Editor (New)
 
-Install via the SillyTavern extension installer:
+![2025-09-21_14-44-41](https://github.com/user-attachments/assets/30a1f068-2704-4a1e-9dca-df2b89b98a18)
 
-```txt
-https://github.com/bmen25124/SillyTavern-WorldInfo-Recommender
-```
+* 💾 **Backup & Restore:** Backup feature, delete multiple, revert all, save all
+* 🗂️ **Two Views:**
 
-To open the recommender popup, click the extension icon:
+  * Card View → all details by default
+  * Compact View → minimalist titles + icons
+* 🔎 **Filters:** by *First Word* or *Category*
 
-![icon](images/icon.png)
+#### 🏷️ Categories (Major Feature)
 
-## Demo Video
+* Assign **custom categories + icons** (stored locally, no changes to your JSON file)
+* 🎨 **Custom Colors:** make entries visually distinct
+* 🔤 **Custom Icons:** emojis or letters for flair
+* 🗄️ **Category Manager Tab:**
 
-https://github.com/user-attachments/assets/a26c8e44-7087-42df-9afa-7f7a2c752359
+  * Drag to reorder category tabs (affects dropdown order)
+  * 👁️ Toggle category visibility with the “Eye” icon
 
-## FAQ
 
->Can I use this with my local 8B/12B RP model?
 
-You should test it, but my guess is no. Because the model needs to give _XML_ output. RP models might not be able to do that.
+#### 📦 Bulk Updates (Major Feature)
 
->Can you suggest a model?
+* 📝 **Bulk Edit Titles:** add prefix, suffix, counters, or in-entry dates
+* 🔢 **Bulk Edit Order:** sequence entries ascending/descending
+* 📍 **Bulk Edit Position:** adjust positions of multiple entries at once
 
-Gemini models are cheap, fast, and efficient. I usually use Gemini Flash 2.0. But most decent models should work fine.
+https://github.com/user-attachments/assets/b41e1f10-fd78-498d-b210-303f0aa2cf62
+
+---
+
+### ⌨️ Hotkeys
+
+* ✅ **Select Multiple:** `Shift + Click` (first entry → next entry)
+* ⚙️ **Apply Changes to Multiple:** after selecting, edits to position, activation strategy, or category apply to all

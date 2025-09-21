@@ -11,7 +11,7 @@ import {
   RunWorldInfoRecommendationParams,
   Session,
 } from './generate.js';
-import { ContextToSend, settingsManager } from './settings.js';
+import { ContextToSend, extensionDisplayName, settingsManager } from './settings.js';
 
 let popupIcon: HTMLDivElement | undefined;
 export function setPopupIcon(icon: HTMLDivElement) {
@@ -82,7 +82,7 @@ export function initializeCommands() {
   globalContext.SlashCommandParser.addCommandObject(
     globalContext.SlashCommand.fromProps({
       name: 'world-info-recommender-popup-open',
-      helpString: 'Open World Info Recommender popup',
+      helpString: `Open ${extensionDisplayName} popup`,
       unnamedArgumentList: [],
       callback: async (_args: any, _value: any) => {
         if (popupIcon) {
@@ -102,7 +102,7 @@ export function initializeCommands() {
       helpString: `
               <div class="inline-drawer">
                   <details>
-                      <summary>Run the World Info Recommender AI automatically.</summary>
+                      <summary>Run the ${extensionDisplayName} AI automatically.</summary>
                       <div class="list-group">
                           Executes the recommendation process using the specified parameters.
                           <br>
@@ -431,7 +431,7 @@ export function initializeCommands() {
           };
 
           // 2. Run Recommendation
-          if (!silent) st_echo('info', `Running World Info Recommender...`);
+          if (!silent) st_echo('info', `Running ${extensionDisplayName}...`);
           const suggestedEntries = await runWorldInfoRecommendation(params);
 
           if (Object.keys(suggestedEntries).length === 0) {
@@ -586,13 +586,13 @@ export function initializeCommands() {
               parts.length > 0
                 ? `
                 <div class="wir-results">
-                  <h4>World Info Recommender Results:</h4>
+                  <h4>${extensionDisplayName} Results:</h4>
                   ${parts.join('')}
                 </div>
                 `
                 : `
                 <div class="wir-results">
-                  <h4>World Info Recommender:</h4>
+                  <h4>${extensionDisplayName}:</h4>
                   <p>No changes were made</p>
                 </div>
                 `;
@@ -604,7 +604,7 @@ export function initializeCommands() {
         } catch (error: any) {
           console.error('Error running world-info-recommender-run command:', error);
           if (!silent) {
-            st_echo('error', `World Info Recommender command failed: ${error.message}`);
+            st_echo('error', `${extensionDisplayName} command failed: ${error.message}`);
           }
           return false; // Indicate failure
         }

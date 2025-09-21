@@ -37,7 +37,21 @@ export interface RunWorldInfoRecommendationParams {
   continueFrom?: { worldName: string; entry: WIEntry; mode: 'continue' | 'revise' };
 }
 
-export async function runWorldInfoRecommendation({
+export interface BuildRecommendationMessagesParams {
+  profileId: string;
+  userPrompt: string;
+  buildPromptOptions: BuildPromptOptions;
+  session: Session;
+  entriesGroupByWorldName: Record<string, WIEntry[]>;
+  promptSettings: typeof dumbSettings.prompts;
+  mainContextList: {
+    promptName: string;
+    role: MessageRole;
+  }[];
+  continueFrom?: { worldName: string; entry: WIEntry; mode: 'continue' | 'revise' };
+}
+
+export async function buildRecommendationMessages({
   profileId,
   userPrompt,
   buildPromptOptions,
@@ -45,9 +59,8 @@ export async function runWorldInfoRecommendation({
   entriesGroupByWorldName,
   promptSettings,
   mainContextList,
-  maxResponseToken,
   continueFrom,
-}: RunWorldInfoRecommendationParams): Promise<Record<string, WIEntry[]>> {
+}: BuildRecommendationMessagesParams): Promise<Message[]> {
   if (!profileId) {
     throw new Error('No connection profile selected.');
   }
@@ -123,10 +136,28 @@ export async function runWorldInfoRecommendation({
 
   const messages: Message[] = [];
   {
+    let builtPromptMessages: Message[] | null = null;
     for (const mainContext of mainContextList) {
-      // Chat history is exception, since it is not a template
-      if (mainContext.promptName === 'chatHistory') {
-        messages.push(...(await buildPrompt(selectedApi, buildPromptOptions)).result);
+      if (mainContext.promptName === 'connectionProfile' || mainContext.promptName === 'chatHistory') {
+        if (!builtPromptMessages) {
+          builtPromptMessages = (await buildPrompt(selectedApi, buildPromptOptions)).result;
+          const systemMsgs = builtPromptMessages.filter((m) => m.role === 'system');
+          templateData['connectionProfilePrompts'] = systemMsgs.map((m) => m.content).join('\n');
+          const chatMsgs = builtPromptMessages.filter((m) => m.role !== 'system');
+          templateData['chatHistory'] = chatMsgs.map((m) => m.content).join('\n');
+        }
+        const prompt = promptSettings[mainContext.promptName];
+        if (!prompt) {
+          continue;
+        }
+        const message: Message = {
+          role: mainContext.role,
+          content: Handlebars.compile(prompt.content, { noEscape: true })(templateData),
+        };
+        message.content = globalContext.substituteParams(message.content);
+        if (message.content) {
+          messages.push(message);
+        }
         continue;
       }
 
@@ -168,7 +199,30 @@ export async function runWorldInfoRecommendation({
     }
   }
 
-  // console.log("Sending messages:", messages);
+  return messages;
+}
+
+export async function runWorldInfoRecommendation({
+  profileId,
+  userPrompt,
+  buildPromptOptions,
+  session,
+  entriesGroupByWorldName,
+  promptSettings,
+  mainContextList,
+  maxResponseToken,
+  continueFrom,
+}: RunWorldInfoRecommendationParams): Promise<Record<string, WIEntry[]>> {
+  const messages = await buildRecommendationMessages({
+    profileId,
+    userPrompt,
+    buildPromptOptions,
+    session,
+    entriesGroupByWorldName,
+    promptSettings,
+    mainContextList,
+    continueFrom,
+  });
 
   const response = (await globalContext.ConnectionManagerRequestService.sendRequest(
     profileId,

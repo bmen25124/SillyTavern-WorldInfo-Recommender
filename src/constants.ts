@@ -145,3 +145,7 @@ export const DEFAULT_TASK_DESCRIPTION = `## Rules
 
 ## Your Task
 {{userInstructions}}{{/if}}`;
+
+export const DEFAULT_CONNECTION_PROFILE_PROMPT = `{{connectionProfilePrompts}}`;
+
+export const DEFAULT_CHAT_HISTORY_PROMPT = `{{chatHistory}}`;

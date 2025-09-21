@@ -10,8 +10,6 @@ interface SelectEntriesPopupProps {
   entriesByWorldName: Record<string, WIEntry[]>;
   // The initially selected entry UIDs.
   initialSelectedUids: Record<string, number[]>;
-  // The title to display at the top of the popup.
-  title: string;
 }
 
 /**
@@ -26,7 +24,7 @@ export interface SelectEntriesPopupRef {
  * with filtering and bulk selection capabilities.
  */
 export const SelectEntriesPopup = forwardRef<SelectEntriesPopupRef, SelectEntriesPopupProps>(
-  ({ entriesByWorldName, initialSelectedUids, title }, ref) => {
+  ({ entriesByWorldName, initialSelectedUids }, ref) => {
     const [filterText, setFilterText] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
       // Initialize the Set from the initial props
@@ -99,7 +97,7 @@ export const SelectEntriesPopup = forwardRef<SelectEntriesPopupRef, SelectEntrie
 
     return (
       <div className="select-entries-popup">
-        <h3>{title}</h3>
+        <h3>Select Entries to Include</h3>
         <div className="controls">
           <input
             type="text"
@@ -108,7 +106,7 @@ export const SelectEntriesPopup = forwardRef<SelectEntriesPopupRef, SelectEntrie
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
           />
-          <STButton onClick={handleSelectAllFiltered}>Select All (Filtered)</STButton>
+          <STButton onClick={handleSelectAllFiltered}>Select All</STButton>
           <STButton onClick={handleDeselectAll}>Deselect All</STButton>
         </div>
         <div className="entry-list">

@@ -1,11 +1,11 @@
 {
-    "display_name": "World Info Recommender",
+    "display_name": "World Info Recommender & Lorebook Editor+",
     "loading_order": 300,
     "requires": [],
     "optional": [],
     "js": "dist/index.js",
     "css": "dist/style.css",
-    "author": "bmen25124",
-    "version": "0.1.5",
-    "homePage": "https://github.com/bmen25124/SillyTavern-WorldInfo-Recommender"
+    "author": "bmen25124 - Modded by Kawhi42",
+    "version": "0.1.8",
+    "homePage": "https://github.com/Kawhi42/SillyTavern-WorldInfo-Recommender"
 }

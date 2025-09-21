@@ -9,7 +9,7 @@ import {
 } from 'sillytavern-utils-lib/components';
 import { st_runRegexScript } from 'sillytavern-utils-lib/config';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
-import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { ExtendedWIEntry, POSITION_OPTIONS, ROLE_AT_DEPTH } from '../types.js';
 
 const globalContext = SillyTavern.getContext();
 
@@ -17,7 +17,7 @@ const globalContext = SillyTavern.getContext();
  * The props for the EditEntryPopup component.
  */
 interface EditEntryPopupProps {
-  entry: WIEntry;
+  entry: ExtendedWIEntry;
   initialRegexIds: Record<string, Partial<RegexScriptData>>;
 }
 
@@ -27,7 +27,7 @@ interface EditEntryPopupProps {
  */
 export interface EditEntryPopupRef {
   getFormData: () => {
-    updatedEntry: WIEntry;
+    updatedEntry: ExtendedWIEntry;
     updatedRegexIds: Record<string, Partial<RegexScriptData>>;
   };
 }
@@ -44,6 +44,9 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
   const [keywords, setKeywords] = useState(entry.key.join(', '));
   const [content, setContent] = useState(entry.content);
   const [regexListItems, setRegexListItems] = useState<SortableListItemData[]>([]);
+  const [position, setPosition] = useState<number | undefined>(entry.position);
+  const [depth, setDepth] = useState<number | null>(entry.depth ?? null);
+  const [roleAtDepth, setRoleAtDepth] = useState<number | null>(entry.roleAtDepth ?? null);
 
   useEffect(() => {
     const loadedRegexes = globalContext.extensionSettings.regex ?? [];
@@ -65,7 +68,7 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
   // It's the bridge that allows the parent's "OK" button to retrieve this component's final state.
   useImperativeHandle(ref, () => ({
     getFormData: () => {
-      const updatedEntry: WIEntry = {
+      const updatedEntry: ExtendedWIEntry = {
         ...entry,
         comment: title.trim(),
         key: keywords
@@ -73,6 +76,9 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
           .map((k) => k.trim())
           .filter(Boolean),
         content,
+        position,
+        depth,
+        roleAtDepth,
       };
 
       const updatedRegexIds = regexListItems.reduce(
@@ -132,6 +138,56 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
         <label>Keywords (comma-separated)</label>
         <input type="text" className="text_pole" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
       </div>
+      <div>
+        <label>Position</label>
+        <select
+          className="text_pole"
+          value={position ?? ''}
+          onChange={(e) => {
+            const newPos = e.target.value === '' ? undefined : Number(e.target.value);
+            setPosition(newPos);
+            if (newPos !== 4) {
+              setDepth(null);
+              setRoleAtDepth(null);
+            }
+          }}
+        >
+          <option value=""></option>
+          {POSITION_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {position === 4 && (
+        <div>
+          <label>Depth</label>
+          <input
+            type="number"
+            className="text_pole"
+            value={depth ?? ''}
+            onChange={(e) => setDepth(e.target.value === '' ? null : Number(e.target.value))}
+          />
+        </div>
+      )}
+      {position === 4 && (
+        <div>
+          <label>Role</label>
+          <select
+            className="text_pole"
+            value={roleAtDepth ?? ''}
+            onChange={(e) => setRoleAtDepth(e.target.value === '' ? null : Number(e.target.value))}
+          >
+            <option value=""></option>
+            {ROLE_AT_DEPTH.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div>
         <h4>Apply Regex Scripts</h4>
         <STFancyDropdown

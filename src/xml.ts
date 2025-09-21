@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { ExtendedWIEntry } from './types.js';
 
 const parser = new XMLParser();
 
@@ -13,7 +14,7 @@ interface XmlParseOptions {
   previousContent?: string;
 }
 
-export function parseXMLOwn(xml: string, options: XmlParseOptions = {}): Record<string, WIEntry[]> {
+export function parseXMLOwn(xml: string, options: XmlParseOptions = {}): Record<string, ExtendedWIEntry[]> {
   let processedXml = xml;
   const { previousContent } = options;
 
@@ -33,7 +34,7 @@ export function parseXMLOwn(xml: string, options: XmlParseOptions = {}): Record<
     throw new Error('Incomplete XML: Missing </content> tag');
   }
 
-  const entriesByWorldName: Record<string, WIEntry[]> = {};
+  const entriesByWorldName: Record<string, ExtendedWIEntry[]> = {};
   try {
     const rawResponse = parser.parse(processedXml);
     // console.log('Raw response', rawResponse);
@@ -57,6 +58,9 @@ export function parseXMLOwn(xml: string, options: XmlParseOptions = {}): Record<
         comment: entry.name,
         disable: false,
         keysecondary: [],
+        position: entry.position !== undefined ? Number(entry.position) : undefined,
+        depth: entry.depth !== undefined ? Number(entry.depth) : null,
+        roleAtDepth: entry.roleAtDepth !== undefined ? Number(entry.roleAtDepth) : null,
       });
     }
 

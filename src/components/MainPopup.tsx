@@ -20,8 +20,9 @@ import {
   world_names,
 } from 'sillytavern-utils-lib/config';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { ExtendedWIEntry, SaveEntryPayload } from '../types.js';
 
-import { runWorldInfoRecommendation, Session } from '../generate.js';
+import { buildRecommendationMessages, runWorldInfoRecommendation, Session } from '../generate.js';
 import { ExtensionSettings, settingsManager } from '../settings.js';
 import { Character } from 'sillytavern-utils-lib/types';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
@@ -30,6 +31,7 @@ import { SuggestedEntry } from './SuggestedEntry.js';
 import { Handlebars } from '../../../../../lib.js';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
 import { SelectEntriesPopup, SelectEntriesPopupRef } from './SelectEntriesPopup.js';
+import { LorebookEditor } from './LorebookEditor.js';
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 
 if (!Handlebars.helpers['join']) {
@@ -59,110 +61,280 @@ export const MainPopup: FC = () => {
     regexIds: {},
   });
   const [allWorldNames, setAllWorldNames] = useState<string[]>([]);
-  const [entriesGroupByWorldName, setEntriesGroupByWorldName] = useState<Record<string, WIEntry[]>>({});
+  const [entriesGroupByWorldName, setEntriesGroupByWorldName] =
+    useState<Record<string, ExtendedWIEntry[]>>({});
   const [groupMembers, setGroupMembers] = useState<Character[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSelectingEntries, setIsSelectingEntries] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'recommender' | 'editor'>('recommender');
+  const [rightTab, setRightTab] = useState<'suggestions' | 'preview'>('suggestions');
+  const [previewText, setPreviewText] = useState('');
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const selectEntriesPopupRef = useRef<SelectEntriesPopupRef>(null);
-  const importPopupRef = useRef<SelectEntriesPopupRef>(null);
 
   const avatarKey = useMemo(() => getAvatar() ?? '_global', [this_chid, selected_group]);
+  const prompt = settings.promptPresets[settings.promptPreset]?.content ?? '';
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    setEntriesGroupByWorldName({});
+    setAllWorldNames([]);
+    setGroupMembers([]);
+
+    const avatar = getAvatar();
+    const key = `worldInfoRecommend_${avatarKey}`;
+
+    // Load session from localStorage
+    const savedSession: Partial<Session> = JSON.parse(localStorage.getItem(key) ?? '{}');
+    const initialSession: Session = {
+      suggestedEntries: savedSession.suggestedEntries ?? {},
+      blackListedEntries: savedSession.blackListedEntries ?? [],
+      selectedWorldNames: savedSession.selectedWorldNames ?? [],
+      selectedEntryUids: savedSession.selectedEntryUids ?? {},
+      regexIds: savedSession.regexIds ?? {},
+    };
+
+    // Load World Info
+    const toExtendedEntries = (entries?: WIEntry[]): ExtendedWIEntry[] =>
+      (entries ?? []).map((entry) => {
+        const normalizedEntry = entry as ExtendedWIEntry & { depth_role?: number | null };
+        return {
+          ...entry,
+          roleAtDepth: normalizedEntry.roleAtDepth ?? normalizedEntry.depth_role ?? null,
+        };
+      });
+
+    let loadedEntries: Record<string, WIEntry[]> = {};
+    if (avatar) {
+      if (selected_group) {
+        const groupWorldInfo = await getActiveWorldInfo(['chat', 'persona', 'global']);
+        if (groupWorldInfo) loadedEntries = groupWorldInfo;
+
+        const group = groups.find((g: any) => g.id === selected_group);
+        if (group) {
+          for (const member of group.members) {
+            const index = globalContext.characters.findIndex((c: Character) => c.avatar === member);
+            if (index !== -1) {
+              const worldInfo = await getActiveWorldInfo(['character'], index);
+              if (worldInfo) loadedEntries = { ...loadedEntries, ...worldInfo };
+            }
+          }
+        }
+      } else {
+        loadedEntries = await getActiveWorldInfo(['all'], this_chid);
+      }
+    } else {
+      for (const worldName of world_names) {
+        const worldInfo = await globalContext.loadWorldInfo(worldName);
+        if (worldInfo) loadedEntries[worldName] = Object.values(worldInfo.entries);
+      }
+    }
+
+    const activeWorldNames = Object.keys(loadedEntries);
+    let entriesByWorldName: Record<string, ExtendedWIEntry[]> = Object.fromEntries(
+      Object.entries(loadedEntries).map(([worldName, entries]) => [worldName, toExtendedEntries(entries)]),
+    );
+
+    const orderedWorldNames: string[] = [];
+    const orderedWorldNamesSet = new Set<string>();
+    const addWorldName = (worldName?: string) => {
+      if (!worldName || orderedWorldNamesSet.has(worldName)) {
+        return;
+      }
+      orderedWorldNamesSet.add(worldName);
+      orderedWorldNames.push(worldName);
+    };
+
+    world_names.forEach((name: string) => addWorldName(name));
+    Object.keys(entriesByWorldName).forEach((name) => addWorldName(name));
+
+    const missingWorldNames = orderedWorldNames.filter((name) => !(name in entriesByWorldName));
+    if (missingWorldNames.length > 0) {
+      const additionalEntries = await Promise.all(
+        missingWorldNames.map(async (worldName) => {
+          try {
+            const worldInfo = await globalContext.loadWorldInfo(worldName);
+            if (!worldInfo) {
+              return [worldName, [] as ExtendedWIEntry[]] as const;
+            }
+            return [worldName, toExtendedEntries(Object.values(worldInfo.entries))] as const;
+          } catch (error) {
+            console.error(`Failed to load lorebook "${worldName}"`, error);
+            return [worldName, [] as ExtendedWIEntry[]] as const;
+          }
+        }),
+      );
+      for (const [worldName, entries] of additionalEntries) {
+        entriesByWorldName[worldName] = entries;
+      }
+    }
+
+    const orderedEntries: Record<string, ExtendedWIEntry[]> = {};
+    for (const worldName of orderedWorldNames) {
+      orderedEntries[worldName] = entriesByWorldName[worldName] ?? [];
+    }
+    for (const [worldName, entries] of Object.entries(entriesByWorldName)) {
+      if (!orderedWorldNamesSet.has(worldName)) {
+        orderedWorldNamesSet.add(worldName);
+        orderedWorldNames.push(worldName);
+        orderedEntries[worldName] = entries;
+      }
+    }
+
+    setEntriesGroupByWorldName(orderedEntries);
+    setAllWorldNames(orderedWorldNames);
+
+    // Sync session's selected worlds with available worlds
+    if (initialSession.selectedWorldNames.length === 0 && avatarKey !== '_global') {
+      const activeWorldNameSet = new Set(activeWorldNames);
+      const defaultSelected = orderedWorldNames.filter((name) => activeWorldNameSet.has(name));
+      initialSession.selectedWorldNames =
+        defaultSelected.length > 0 ? defaultSelected : [...orderedWorldNames];
+    } else {
+      initialSession.selectedWorldNames = initialSession.selectedWorldNames.filter((name) =>
+        orderedWorldNamesSet.has(name),
+      );
+    }
+
+    // Sync session's selected entry UIDs with available entries
+    const validEntryUids: Record<string, number[]> = {};
+    if (initialSession.selectedEntryUids) {
+      for (const [worldName, uids] of Object.entries(initialSession.selectedEntryUids)) {
+        const entries = orderedEntries[worldName];
+        if (entries) {
+          const worldEntryUids = new Set(entries.map((e) => e.uid));
+          const validUids = uids.filter((uid) => worldEntryUids.has(uid));
+          if (validUids.length > 0) {
+            validEntryUids[worldName] = validUids;
+          }
+        }
+      }
+    }
+    initialSession.selectedEntryUids = validEntryUids;
+    setSession(initialSession); // Set the fully loaded and synced session
+
+    // Load group members for char card selection if in group chat
+    if (selected_group) {
+      const group = groups.find((g: any) => g.id === selected_group);
+      if (group?.generation_mode === 0) {
+        const members = group.members
+          .map((memberAvatar: string) => globalContext.characters.find((c: Character) => c.avatar === memberAvatar))
+          .filter((c?: Character): c is Character => !!c);
+        setGroupMembers(members);
+      }
+    }
+
+    setIsLoading(false);
+  }, [avatarKey, globalContext, groups, selected_group, world_names]);
 
   // --- Data Loading Effect ---
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      setEntriesGroupByWorldName({});
-      setAllWorldNames([]);
-      setGroupMembers([]);
+    void loadData();
+  }, [loadData]);
 
-      const avatar = getAvatar();
-      const key = `worldInfoRecommend_${avatarKey}`;
-
-      // Load session from localStorage
-      const savedSession: Partial<Session> = JSON.parse(localStorage.getItem(key) ?? '{}');
-      const initialSession: Session = {
-        suggestedEntries: savedSession.suggestedEntries ?? {},
-        blackListedEntries: savedSession.blackListedEntries ?? [],
-        selectedWorldNames: savedSession.selectedWorldNames ?? [],
-        selectedEntryUids: savedSession.selectedEntryUids ?? {},
-        regexIds: savedSession.regexIds ?? {},
-      };
-
-      // Load World Info
-      let loadedEntries: Record<string, WIEntry[]> = {};
-      if (avatar) {
-        if (selected_group) {
-          const groupWorldInfo = await getActiveWorldInfo(['chat', 'persona', 'global']);
-          if (groupWorldInfo) loadedEntries = groupWorldInfo;
-
-          const group = groups.find((g: any) => g.id === selected_group);
-          if (group) {
-            for (const member of group.members) {
-              const index = globalContext.characters.findIndex((c: Character) => c.avatar === member);
-              if (index !== -1) {
-                const worldInfo = await getActiveWorldInfo(['character'], index);
-                if (worldInfo) loadedEntries = { ...loadedEntries, ...worldInfo };
-              }
-            }
-          }
-        } else {
-          loadedEntries = await getActiveWorldInfo(['all'], this_chid);
-        }
-      } else {
-        for (const worldName of world_names) {
-          const worldInfo = await globalContext.loadWorldInfo(worldName);
-          if (worldInfo) loadedEntries[worldName] = Object.values(worldInfo.entries);
-        }
-      }
-      setEntriesGroupByWorldName(loadedEntries);
-      const loadedWorldNames = Object.keys(loadedEntries);
-      setAllWorldNames(loadedWorldNames);
-
-      // Sync session's selected worlds with available worlds
-      if (initialSession.selectedWorldNames.length === 0 && avatarKey !== '_global') {
-        initialSession.selectedWorldNames = [...loadedWorldNames];
-      } else {
-        initialSession.selectedWorldNames = initialSession.selectedWorldNames.filter((name) =>
-          loadedWorldNames.includes(name),
+  useEffect(() => {
+    if (!settings.profileId) {
+      setPreviewText('');
+      return;
+    }
+    setIsPreviewLoading(true);
+    const handle = setTimeout(async () => {
+      try {
+        const profile = globalContext.extensionSettings.connectionManager?.profiles?.find(
+          (p) => p.id === settings.profileId,
         );
-      }
-
-      // Sync session's selected entry UIDs with available entries
-      const validEntryUids: Record<string, number[]> = {};
-      if (initialSession.selectedEntryUids) {
-        for (const [worldName, uids] of Object.entries(initialSession.selectedEntryUids)) {
-          if (loadedEntries[worldName]) {
-            const worldEntryUids = new Set(loadedEntries[worldName].map((e) => e.uid));
-            const validUids = uids.filter((uid) => worldEntryUids.has(uid));
-            if (validUids.length > 0) {
-              validEntryUids[worldName] = validUids;
+        if (!profile) throw new Error('Connection profile not found.');
+        const avatar = getAvatar();
+        const buildPromptOptions: BuildPromptOptions = {
+          presetName: profile.preset,
+          contextName: profile.context,
+          instructName: profile.instruct,
+          syspromptName: profile.sysprompt,
+          ignoreCharacterFields: !settings.contextToSend.charCard,
+          ignoreWorldInfo: true,
+          ignoreAuthorNote: !settings.contextToSend.authorNote,
+          maxContext:
+            settings.maxContextType === 'custom'
+              ? settings.maxContextValue
+              : settings.maxContextType === 'profile'
+                ? 'preset'
+                : 'active',
+          includeNames: !!selected_group,
+        };
+        if (!avatar) {
+          buildPromptOptions.messageIndexesBetween = { start: -1, end: -1 };
+        } else {
+          switch (settings.contextToSend.messages.type) {
+            case 'none':
+              buildPromptOptions.messageIndexesBetween = { start: -1, end: -1 };
+              break;
+            case 'first':
+              buildPromptOptions.messageIndexesBetween = { start: 0, end: settings.contextToSend.messages.first ?? 10 };
+              break;
+            case 'last': {
+              const lastCount = settings.contextToSend.messages.last ?? 10;
+              const chatLength = globalContext.chat?.length ?? 0;
+              buildPromptOptions.messageIndexesBetween = {
+                end: Math.max(0, chatLength - 1),
+                start: Math.max(0, chatLength - lastCount),
+              };
+              break;
             }
+            case 'range':
+              if (settings.contextToSend.messages.range)
+                buildPromptOptions.messageIndexesBetween = settings.contextToSend.messages.range;
+              break;
           }
         }
+        const promptSettings = structuredClone(settings.prompts);
+        if (!settings.contextToSend.stDescription) delete (promptSettings as any).stDescription;
+        if (!settings.contextToSend.worldInfo || session.selectedWorldNames.length === 0)
+          delete (promptSettings as any).currentLorebooks;
+        const anySuggestedEntries = Object.values(session.suggestedEntries).some((e) => e.length > 0);
+        if (!settings.contextToSend.suggestedEntries || !anySuggestedEntries)
+          delete (promptSettings as any).suggestedLorebooks;
+        if (session.blackListedEntries.length === 0) delete (promptSettings as any).blackListedEntries;
+        const messages = await buildRecommendationMessages({
+          profileId: settings.profileId,
+          userPrompt: prompt,
+          buildPromptOptions,
+          session,
+          entriesGroupByWorldName,
+          promptSettings,
+          mainContextList: settings.mainContextTemplatePresets[settings.mainContextTemplatePreset].prompts
+            .filter((p) => p.enabled)
+            .map((p) => ({ promptName: p.promptName, role: p.role })),
+        });
+        setPreviewText(messages.map((m) => m.content).join('\n\n'));
+      } catch (err) {
+        setPreviewText('');
+      } finally {
+        setIsPreviewLoading(false);
       }
-      initialSession.selectedEntryUids = validEntryUids;
-      setSession(initialSession); // Set the fully loaded and synced session
-
-      // Load group members for char card selection if in group chat
-      if (selected_group) {
-        const group = groups.find((g: any) => g.id === selected_group);
-        if (group?.generation_mode === 0) {
-          const members = group.members
-            .map((memberAvatar: string) => globalContext.characters.find((c: Character) => c.avatar === memberAvatar))
-            .filter((c?: Character): c is Character => !!c);
-          setGroupMembers(members);
-        }
-      }
-
-      setIsLoading(false);
+    }, 300);
+    return () => {
+      clearTimeout(handle);
+      setIsPreviewLoading(false);
     };
-
-    loadData();
-  }, [avatarKey]);
+  }, [
+    prompt,
+    settings.contextToSend,
+    session.selectedWorldNames,
+    session.selectedEntryUids,
+    session.regexIds,
+    entriesGroupByWorldName,
+    session.suggestedEntries,
+    session.blackListedEntries,
+    settings.mainContextTemplatePresets,
+    settings.mainContextTemplatePreset,
+    settings.promptPresets,
+    settings.promptPreset,
+    settings.profileId,
+    settings.maxContextType,
+    settings.maxContextValue,
+  ]);
 
   // --- Session Saving Effect ---
   useEffect(() => {
@@ -207,7 +379,11 @@ export const MainPopup: FC = () => {
 
   // --- Core Logic Callbacks ---
   const addEntry = useCallback(
-    async (entry: WIEntry, selectedWorldName: string, skipSave: boolean = false): Promise<'added' | 'updated'> => {
+    async (
+      entry: ExtendedWIEntry,
+      selectedWorldName: string,
+      skipSave: boolean = false,
+    ): Promise<'added' | 'updated'> => {
       const worldInfoCopy = structuredClone(entriesGroupByWorldName);
       if (!worldInfoCopy[selectedWorldName]) {
         worldInfoCopy[selectedWorldName] = [];
@@ -215,7 +391,7 @@ export const MainPopup: FC = () => {
 
       const existingEntry = worldInfoCopy[selectedWorldName].find((e) => e.uid === entry.uid);
       const isUpdate = !!existingEntry;
-      let targetEntry: WIEntry;
+      let targetEntry: ExtendedWIEntry;
 
       if (isUpdate) {
         targetEntry = existingEntry!;
@@ -227,7 +403,15 @@ export const MainPopup: FC = () => {
         worldInfoCopy[selectedWorldName].push(targetEntry);
       }
 
-      Object.assign(targetEntry, { key: entry.key, content: entry.content, comment: entry.comment });
+      Object.assign(targetEntry, {
+        key: entry.key,
+        content: entry.content,
+        comment: entry.comment,
+        position: entry.position,
+        order: entry.order,
+        depth: entry.depth,
+        depth_role: entry.roleAtDepth,
+      });
       setEntriesGroupByWorldName(worldInfoCopy);
 
       if (!skipSave) {
@@ -508,37 +692,162 @@ export const MainPopup: FC = () => {
     });
   };
 
-  const handleImportEntries = useCallback(
-    (selection: Record<string, number[]>) => {
-      setSession((prev) => {
-        const newSuggested = structuredClone(prev.suggestedEntries);
-        let importCount = 0;
+  const handleSaveEntries = useCallback(
+    async (worldName: string, entries: SaveEntryPayload[]) => {
+      if (entries.length === 0) {
+        return;
+      }
 
-        for (const [worldName, uids] of Object.entries(selection)) {
-          if (!entriesGroupByWorldName[worldName]) continue;
-          if (!newSuggested[worldName]) {
-            newSuggested[worldName] = [];
+      let updatedWorldEntries: WIEntry[] = [];
+      setEntriesGroupByWorldName((prev) => {
+        const worldEntries = prev[worldName] ?? [];
+        const replacements = new Map(entries.map(({ originalUid, entry }) => [originalUid, entry]));
+        const handledOriginalUids = new Set<number>();
+        let mutated = false;
+
+        const nextWorldEntries = worldEntries.map((existing) => {
+          const replacement = replacements.get(existing.uid);
+          if (replacement) {
+            handledOriginalUids.add(existing.uid);
+            mutated = true;
+            return replacement;
           }
+          return existing;
+        });
 
-          for (const uid of uids) {
-            // Check if already in suggestions for that world
-            const alreadySuggested = newSuggested[worldName].some((e) => e.uid === uid);
-            if (alreadySuggested) continue;
-
-            const entryToImport = entriesGroupByWorldName[worldName].find((e) => e.uid === uid);
-            if (entryToImport) {
-              newSuggested[worldName].push(structuredClone(entryToImport));
-              importCount++;
-            }
+        entries.forEach(({ originalUid, entry }) => {
+          if (!handledOriginalUids.has(originalUid)) {
+            nextWorldEntries.push(entry);
+            mutated = true;
           }
+        });
+
+        if (!mutated) {
+          updatedWorldEntries = worldEntries;
+          return prev;
         }
-        if (importCount > 0) {
-          st_echo('success', `Imported ${importCount} entries for revision.`);
-        }
-        return { ...prev, suggestedEntries: newSuggested };
+
+        updatedWorldEntries = nextWorldEntries;
+        return { ...prev, [worldName]: nextWorldEntries };
       });
+
+      try {
+        const finalFormat = {
+          entries: Object.fromEntries(updatedWorldEntries.map((e) => [e.uid, e])),
+        };
+        await globalContext.saveWorldInfo(worldName, finalFormat);
+        globalContext.reloadWorldInfoEditor(worldName, true);
+        if (entries.length === 1) {
+          const savedEntry = entries[0].entry;
+          st_echo('success', `Saved entry ${savedEntry.comment || savedEntry.uid} in ${worldName}`);
+        } else {
+          st_echo('success', `Saved ${entries.length} entries in ${worldName}`);
+        }
+      } catch (error: any) {
+        st_echo(
+          'error',
+          `Failed to save ${entries.length === 1 ? 'entry' : 'entries'} in ${worldName}: ${error?.message || error}`,
+        );
+        throw error;
+      }
     },
-    [entriesGroupByWorldName],
+    [],
+  );
+
+  const handleDeleteEntries = useCallback(
+    async (worldName: string, originalUids: number[]) => {
+      if (originalUids.length === 0) {
+        return;
+      }
+
+      let mutated = false;
+      let nextWorldEntries: WIEntry[] = [];
+      let removedEntries: WIEntry[] = [];
+
+      setEntriesGroupByWorldName((prev) => {
+        const worldEntries = prev[worldName] ?? [];
+        if (worldEntries.length === 0) {
+          nextWorldEntries = worldEntries;
+          removedEntries = [];
+          return prev;
+        }
+
+        const toDelete = new Set(originalUids);
+        const retained: WIEntry[] = [];
+        const removed: WIEntry[] = [];
+
+        worldEntries.forEach((entry) => {
+          if (toDelete.has(entry.uid)) {
+            removed.push(entry);
+          } else {
+            retained.push(entry);
+          }
+        });
+
+        if (removed.length === 0) {
+          nextWorldEntries = worldEntries;
+          removedEntries = [];
+          return prev;
+        }
+
+        mutated = true;
+        nextWorldEntries = retained;
+        removedEntries = removed;
+        return { ...prev, [worldName]: retained };
+      });
+
+      if (!mutated) {
+        return;
+      }
+
+      const removedUidSet = new Set(removedEntries.map((entry) => entry.uid));
+
+      try {
+        const finalFormat = {
+          entries: Object.fromEntries(nextWorldEntries.map((entry) => [entry.uid, entry] as const)),
+        };
+        await globalContext.saveWorldInfo(worldName, finalFormat);
+        globalContext.reloadWorldInfoEditor(worldName, true);
+
+        setSession((prev) => {
+          const existing = prev.selectedEntryUids[worldName];
+          if (!existing) {
+            return prev;
+          }
+
+          const filtered = existing.filter((uid) => !removedUidSet.has(uid));
+          if (filtered.length === existing.length) {
+            return prev;
+          }
+
+          const nextSelectedEntryUids = { ...prev.selectedEntryUids };
+          if (filtered.length > 0) {
+            nextSelectedEntryUids[worldName] = filtered;
+          } else {
+            delete nextSelectedEntryUids[worldName];
+          }
+
+          return { ...prev, selectedEntryUids: nextSelectedEntryUids };
+        });
+
+        if (removedEntries.length === 1) {
+          const removedEntry = removedEntries[0];
+          const label = removedEntry.comment || removedEntry.uid;
+          st_echo('success', `Deleted entry ${label} from ${worldName}`);
+        } else {
+          st_echo('success', `Deleted ${removedEntries.length} entries from ${worldName}`);
+        }
+      } catch (error: any) {
+        st_echo(
+          'error',
+          `Failed to delete ${
+            originalUids.length === 1 ? 'entry' : 'entries'
+          } in ${worldName}: ${error?.message || error}`,
+        );
+        throw error;
+      }
+    },
+    [],
   );
 
   const entriesForSelectionPopup = useMemo(() => {
@@ -563,347 +872,386 @@ export const MainPopup: FC = () => {
   return (
     <>
       <div id="worldInfoRecommenderPopup">
-        <h2>World Info Recommender</h2>
-        <div className="container">
-          {/* Left Column */}
-          <div className="column">
-            <div className="card">
-              <h3>Connection Profile</h3>
-              <STConnectionProfileSelect
-                initialSelectedProfileId={settings.profileId}
-                // @ts-ignore
-                onChange={(profile) => updateSetting('profileId', profile?.id)}
-              />
-            </div>
-
-            <div className="card">
-              <h3>Context to Send</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                <label className="checkbox_label">
-                  <input
-                    type="checkbox"
-                    checked={settings.contextToSend.stDescription}
-                    onChange={(e) => updateContextToSend('stDescription', e.target.checked)}
-                  />
-                  Description of SillyTavern and Lorebook
-                </label>
-                {/* Message Options */}
-                {avatarKey != '_global' && (
-                  <div className="message-options">
-                    <h4>Messages to Include</h4>
-                    <select
-                      className="text_pole"
-                      value={settings.contextToSend.messages.type}
-                      onChange={(e) =>
-                        updateContextToSend('messages', {
-                          ...settings.contextToSend.messages,
-                          type: e.target.value as any,
-                        })
-                      }
-                    >
-                      <option value="none">None</option>
-                      <option value="all">All Messages</option>
-                      <option value="first">First X Messages</option>
-                      <option value="last">Last X Messages</option>
-                      <option value="range">Range</option>
-                    </select>
-
-                    {settings.contextToSend.messages.type === 'first' && (
-                      <div style={{ marginTop: '10px' }}>
-                        <label>
-                          First{' '}
-                          <input
-                            type="number"
-                            className="text_pole small message-input"
-                            min="1"
-                            value={settings.contextToSend.messages.first ?? 10}
-                            onChange={(e) =>
-                              updateContextToSend('messages', {
-                                ...settings.contextToSend.messages,
-                                first: parseInt(e.target.value) || 10,
-                              })
-                            }
-                          />{' '}
-                          Messages
-                        </label>
-                      </div>
-                    )}
-                    {settings.contextToSend.messages.type === 'last' && (
-                      <div style={{ marginTop: '10px' }}>
-                        <label>
-                          Last{' '}
-                          <input
-                            type="number"
-                            className="text_pole small message-input"
-                            min="1"
-                            value={settings.contextToSend.messages.last ?? 10}
-                            onChange={(e) =>
-                              updateContextToSend('messages', {
-                                ...settings.contextToSend.messages,
-                                last: parseInt(e.target.value) || 10,
-                              })
-                            }
-                          />{' '}
-                          Messages
-                        </label>
-                      </div>
-                    )}
-                    {settings.contextToSend.messages.type === 'range' && (
-                      <div style={{ marginTop: '10px' }}>
-                        <label>
-                          Range:{' '}
-                          <input
-                            type="number"
-                            className="text_pole small message-input"
-                            min="0"
-                            placeholder="Start"
-                            value={settings.contextToSend.messages.range?.start ?? 0}
-                            onChange={(e) =>
-                              updateContextToSend('messages', {
-                                ...settings.contextToSend.messages,
-                                range: {
-                                  ...settings.contextToSend.messages.range!,
-                                  start: parseInt(e.target.value) || 0,
-                                },
-                              })
-                            }
-                          />{' '}
-                          to{' '}
-                          <input
-                            type="number"
-                            className="text_pole small message-input"
-                            min="1"
-                            placeholder="End"
-                            value={settings.contextToSend.messages.range?.end ?? 10}
-                            onChange={(e) =>
-                              updateContextToSend('messages', {
-                                ...settings.contextToSend.messages,
-                                range: {
-                                  ...settings.contextToSend.messages.range!,
-                                  end: parseInt(e.target.value) || 10,
-                                },
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <label className="checkbox_label">
-                  <input
-                    type="checkbox"
-                    checked={settings.contextToSend.charCard}
-                    onChange={(e) => updateContextToSend('charCard', e.target.checked)}
-                  />
-                  Char Card
-                </label>
-                {groupMembers.length > 0 && (
-                  <div>
-                    <h4>Select Character</h4>
-                    <select className="text_pole" title="Select character for your group.">
-                      {groupMembers.map((member) => (
-                        <option key={member.avatar} value={member.avatar}>
-                          {member.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <label className="checkbox_label">
-                  <input
-                    type="checkbox"
-                    checked={settings.contextToSend.authorNote}
-                    onChange={(e) => updateContextToSend('authorNote', e.target.checked)}
-                  />{' '}
-                  Author Note
-                </label>
-                <label className="checkbox_label">
-                  <input
-                    type="checkbox"
-                    checked={settings.contextToSend.worldInfo}
-                    onChange={(e) => updateContextToSend('worldInfo', e.target.checked)}
-                  />{' '}
-                  World Info
-                </label>
-                <div>
-                  <h4>Lorebooks to Include</h4>
-                  <STFancyDropdown
-                    items={worldInfoDropdownItems}
-                    value={session.selectedWorldNames}
-                    onChange={(newValues) => {
-                      setSession((prev) => {
-                        const newSelectedEntryUids = { ...prev.selectedEntryUids };
-                        const removedWorlds = prev.selectedWorldNames.filter((w) => !newValues.includes(w));
-                        removedWorlds.forEach((w) => delete newSelectedEntryUids[w]);
-                        return { ...prev, selectedWorldNames: newValues, selectedEntryUids: newSelectedEntryUids };
-                      });
-                    }}
-                    multiple
-                    enableSearch
+        <div className="tab-buttons">
+          <button
+            className={`menu_button ${activeTab === 'recommender' ? 'active' : ''}`}
+            onClick={() => setActiveTab('recommender')}
+          >
+            Recommender
+          </button>
+          <button
+            className={`menu_button ${activeTab === 'editor' ? 'active' : ''}`}
+            onClick={() => setActiveTab('editor')}
+          >
+            Lorebook Editor
+          </button>
+        </div>
+        {activeTab === 'recommender' && (
+          <>
+            <div className="container">
+              {/* Left Column */}
+              <div className="column">
+                <div className="card">
+                  <h3>Connection Profile</h3>
+                  <STConnectionProfileSelect
+                    initialSelectedProfileId={settings.profileId}
+                    // @ts-ignore
+                    onChange={(profile) => updateSetting('profileId', profile?.id)}
                   />
                 </div>
-                {session.selectedWorldNames.length > 0 && (
-                  <div className="entry-selection-control">
-                    <STButton
-                      className="menu_button"
-                      onClick={() => setIsSelectingEntries(true)}
-                      title="Select specific entries from the chosen lorebooks"
-                    >
-                      <i className="fa-solid fa-list-check"></i>
-                      Select Entries
-                    </STButton>
-                    <span>
-                      {totalSelectedEntries > 0 ? `${totalSelectedEntries} selected` : 'All entries included'}
-                    </span>
+
+                <div className="card">
+                  <h3>Context to Send</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <label className="checkbox_label">
+                      <input
+                        type="checkbox"
+                        checked={settings.contextToSend.stDescription}
+                        onChange={(e) => updateContextToSend('stDescription', e.target.checked)}
+                      />
+                      Description of SillyTavern and Lorebook
+                    </label>
+                    {/* Message Options */}
+                    {avatarKey != '_global' && (
+                      <div className="message-options">
+                        <h4>Messages to Include</h4>
+                        <select
+                          className="text_pole"
+                          value={settings.contextToSend.messages.type}
+                          onChange={(e) =>
+                            updateContextToSend('messages', {
+                              ...settings.contextToSend.messages,
+                              type: e.target.value as any,
+                            })
+                          }
+                        >
+                          <option value="none">None</option>
+                          <option value="all">All Messages</option>
+                          <option value="first">First X Messages</option>
+                          <option value="last">Last X Messages</option>
+                          <option value="range">Range</option>
+                        </select>
+
+                        {settings.contextToSend.messages.type === 'first' && (
+                          <div style={{ marginTop: '10px' }}>
+                            <label>
+                              First{' '}
+                              <input
+                                type="number"
+                                className="text_pole small message-input"
+                                min="1"
+                                value={settings.contextToSend.messages.first ?? 10}
+                                onChange={(e) =>
+                                  updateContextToSend('messages', {
+                                    ...settings.contextToSend.messages,
+                                    first: parseInt(e.target.value) || 10,
+                                  })
+                                }
+                              />{' '}
+                              Messages
+                            </label>
+                          </div>
+                        )}
+                        {settings.contextToSend.messages.type === 'last' && (
+                          <div style={{ marginTop: '10px' }}>
+                            <label>
+                              Last{' '}
+                              <input
+                                type="number"
+                                className="text_pole small message-input"
+                                min="1"
+                                value={settings.contextToSend.messages.last ?? 10}
+                                onChange={(e) =>
+                                  updateContextToSend('messages', {
+                                    ...settings.contextToSend.messages,
+                                    last: parseInt(e.target.value) || 10,
+                                  })
+                                }
+                              />{' '}
+                              Messages
+                            </label>
+                          </div>
+                        )}
+                        {settings.contextToSend.messages.type === 'range' && (
+                          <div style={{ marginTop: '10px' }}>
+                            <label>
+                              Range:{' '}
+                              <input
+                                type="number"
+                                className="text_pole small message-input"
+                                min="0"
+                                placeholder="Start"
+                                value={settings.contextToSend.messages.range?.start ?? 0}
+                                onChange={(e) =>
+                                  updateContextToSend('messages', {
+                                    ...settings.contextToSend.messages,
+                                    range: {
+                                      ...settings.contextToSend.messages.range!,
+                                      start: parseInt(e.target.value) || 0,
+                                    },
+                                  })
+                                }
+                              />{' '}
+                              to{' '}
+                              <input
+                                type="number"
+                                className="text_pole small message-input"
+                                min="1"
+                                placeholder="End"
+                                value={settings.contextToSend.messages.range?.end ?? 10}
+                                onChange={(e) =>
+                                  updateContextToSend('messages', {
+                                    ...settings.contextToSend.messages,
+                                    range: {
+                                      ...settings.contextToSend.messages.range!,
+                                      end: parseInt(e.target.value) || 10,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <label className="checkbox_label">
+                      <input
+                        type="checkbox"
+                        checked={settings.contextToSend.charCard}
+                        onChange={(e) => updateContextToSend('charCard', e.target.checked)}
+                      />
+                      Char Card
+                    </label>
+                    {groupMembers.length > 0 && (
+                      <div>
+                        <h4>Select Character</h4>
+                        <select className="text_pole" title="Select character for your group.">
+                          {groupMembers.map((member) => (
+                            <option key={member.avatar} value={member.avatar}>
+                              {member.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <label className="checkbox_label">
+                      <input
+                        type="checkbox"
+                        checked={settings.contextToSend.authorNote}
+                        onChange={(e) => updateContextToSend('authorNote', e.target.checked)}
+                      />{' '}
+                      Author Note
+                    </label>
+                    <label className="checkbox_label">
+                      <input
+                        type="checkbox"
+                        checked={settings.contextToSend.worldInfo}
+                        onChange={(e) => updateContextToSend('worldInfo', e.target.checked)}
+                      />{' '}
+                      World Info
+                    </label>
+                    <div>
+                      <h4>Lorebooks to Include</h4>
+                      <STFancyDropdown
+                        items={worldInfoDropdownItems}
+                        value={session.selectedWorldNames}
+                        onChange={(newValues) => {
+                          setSession((prev) => {
+                            const newSelectedEntryUids = { ...prev.selectedEntryUids };
+                            const removedWorlds = prev.selectedWorldNames.filter((w) => !newValues.includes(w));
+                            removedWorlds.forEach((w) => delete newSelectedEntryUids[w]);
+                            return { ...prev, selectedWorldNames: newValues, selectedEntryUids: newSelectedEntryUids };
+                          });
+                        }}
+                        multiple
+                        enableSearch
+                      />
+                    </div>
+                    {session.selectedWorldNames.length > 0 && (
+                      <div className="entry-selection-control">
+                        <STButton
+                          className="menu_button"
+                          onClick={() => setIsSelectingEntries(true)}
+                          title="Select specific entries from the chosen lorebooks"
+                        >
+                          <i className="fa-solid fa-list-check"></i>
+                          Select Entries
+                        </STButton>
+                        <span>
+                          {totalSelectedEntries > 0 ? `${totalSelectedEntries} selected` : 'All entries included'}
+                        </span>
+                      </div>
+                    )}
+                    <label className="checkbox_label">
+                      <input
+                        type="checkbox"
+                        checked={settings.contextToSend.suggestedEntries}
+                        onChange={(e) => updateContextToSend('suggestedEntries', e.target.checked)}
+                      />{' '}
+                      Existing Suggestions
+                    </label>
                   </div>
-                )}
-                <label className="checkbox_label">
-                  <input
-                    type="checkbox"
-                    checked={settings.contextToSend.suggestedEntries}
-                    onChange={(e) => updateContextToSend('suggestedEntries', e.target.checked)}
-                  />{' '}
-                  Existing Suggestions
-                </label>
+                </div>
+
+                <div className="card">
+                  <label>
+                    Max Context
+                    <select
+                      className="text_pole"
+                      title="Select Max Context Type"
+                      value={settings.maxContextType}
+                      onChange={(e) => updateSetting('maxContextType', e.target.value as any)}
+                    >
+                      <option value="profile">Use profile preset</option>
+                      <option value="sampler">Use active preset in sampler settings</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </label>
+
+                  {settings.maxContextType === 'custom' && (
+                    <label style={{ marginTop: '10px' }}>
+                      <input
+                        type="number"
+                        className="text_pole"
+                        min="1"
+                        step="1"
+                        placeholder="Enter max tokens"
+                        value={settings.maxContextValue}
+                        onChange={(e) => updateSetting('maxContextValue', parseInt(e.target.value) || 2048)}
+                      />
+                    </label>
+                  )}
+
+                  <label style={{ display: 'block', marginTop: '10px' }}>
+                    Max Response Tokens
+                    <input
+                      type="number"
+                      className="text_pole"
+                      min="1"
+                      step="1"
+                      placeholder="Enter max response tokens"
+                      value={settings.maxResponseToken}
+                      onChange={(e) => updateSetting('maxResponseToken', parseInt(e.target.value) || 256)}
+                    />
+                  </label>
+                </div>
               </div>
-            </div>
 
-            <div className="card">
-              <label>
-                Max Context
-                <select
-                  className="text_pole"
-                  title="Select Max Context Type"
-                  value={settings.maxContextType}
-                  onChange={(e) => updateSetting('maxContextType', e.target.value as any)}
-                >
-                  <option value="profile">Use profile preset</option>
-                  <option value="sampler">Use active preset in sampler settings</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </label>
-
-              {settings.maxContextType === 'custom' && (
-                <label style={{ marginTop: '10px' }}>
-                  <input
-                    type="number"
-                    className="text_pole"
-                    min="1"
-                    step="1"
-                    placeholder="Enter max tokens"
-                    value={settings.maxContextValue}
-                    onChange={(e) => updateSetting('maxContextValue', parseInt(e.target.value) || 2048)}
+              {/* Right Column */}
+              <div className="wide-column">
+                <div className="card" style={{ flex: '0 0 auto' }}>
+                  <h3>Your Prompt</h3>
+                  <STPresetSelect
+                    label="Prompt Preset"
+                    items={promptPresetItems}
+                    value={settings.promptPreset}
+                    readOnlyValues={['default']}
+                    onChange={(newValue) => updateSetting('promptPreset', newValue ?? 'default')}
+                    onItemsChange={(newItems) => {
+                      const newPresets = newItems.reduce(
+                        (acc, item) => {
+                          acc[item.value] = settings.promptPresets[item.value] ?? { content: '' };
+                          return acc;
+                        },
+                        {} as Record<string, { content: string }>,
+                      );
+                      updateSetting('promptPresets', newPresets);
+                    }}
+                    enableCreate
+                    enableRename
+                    enableDelete
                   />
-                </label>
-              )}
-
-              <label style={{ display: 'block', marginTop: '10px' }}>
-                Max Response Tokens
-                <input
-                  type="number"
-                  className="text_pole"
-                  min="1"
-                  step="1"
-                  placeholder="Enter max response tokens"
-                  value={settings.maxResponseToken}
-                  onChange={(e) => updateSetting('maxResponseToken', parseInt(e.target.value) || 256)}
-                />
-              </label>
-            </div>
-
-            <div className="card">
-              <h3>Your Prompt</h3>
-              <STPresetSelect
-                label="Prompt Preset"
-                items={promptPresetItems}
-                value={settings.promptPreset}
-                readOnlyValues={['default']}
-                onChange={(newValue) => updateSetting('promptPreset', newValue ?? 'default')}
-                onItemsChange={(newItems) => {
-                  const newPresets = newItems.reduce(
-                    (acc, item) => {
-                      acc[item.value] = settings.promptPresets[item.value] ?? { content: '' };
-                      return acc;
-                    },
-                    {} as Record<string, { content: string }>,
-                  );
-                  updateSetting('promptPresets', newPresets);
-                }}
-                enableCreate
-                enableRename
-                enableDelete
-              />
-              <STTextarea
-                value={settings.promptPresets[settings.promptPreset]?.content ?? ''}
-                onChange={(e) => {
-                  const newPresets = { ...settings.promptPresets };
-                  if (newPresets[settings.promptPreset]) {
-                    newPresets[settings.promptPreset].content = e.target.value;
-                    updateSetting('promptPresets', newPresets);
-                  }
-                }}
-                placeholder="e.g., 'Suggest entries for places {{user}} visited.'"
-                rows={4}
-                style={{ marginTop: '5px', width: '100%' }}
-              />
-              <STButton
-                onClick={() => handleGeneration()}
-                disabled={isGenerating}
-                className="menu_button interactable"
-                style={{ marginTop: '5px' }}
-              >
-                {isGenerating ? 'Generating...' : 'Send Prompt'}
-              </STButton>
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div className="wide-column">
-            <div className="card">
-              <h3>Suggested Entries</h3>
-              <div className="actions">
-                <STButton
-                  onClick={handleAddAll}
-                  disabled={isGenerating || suggestedEntriesList.length === 0}
-                  className="menu_button interactable"
-                >
-                  Add All
-                </STButton>
-                <STButton
-                  onClick={() => setIsImporting(true)}
-                  disabled={isGenerating}
-                  className="menu_button interactable"
-                  title="Import existing entries to continue/revise them"
-                >
-                  Import Entry
-                </STButton>
-                <STButton onClick={handleReset} disabled={isGenerating} className="menu_button interactable">
-                  Reset
-                </STButton>
-              </div>
-              <div>
-                {suggestedEntriesList.length === 0 && <p>No suggestions yet. Send a prompt to get started!</p>}
-                {suggestedEntriesList.map(({ worldName, entry }) => (
-                  <SuggestedEntry
-                    key={`${worldName}-${entry.uid}-${entry.comment}`}
-                    initialWorldName={worldName}
-                    entry={entry}
-                    allWorldNames={allWorldNames}
-                    existingEntry={entriesGroupByWorldName[worldName]?.find((e) => e.uid === entry.uid)}
-                    sessionRegexIds={session.regexIds}
-                    onAdd={handleAddSingleEntry}
-                    onRemove={handleRemoveEntry}
-                    onContinue={handleGeneration}
-                    onUpdate={handleUpdateEntry}
-                    entriesGroupByWorldName={entriesGroupByWorldName}
+                  <STTextarea
+                    value={settings.promptPresets[settings.promptPreset]?.content ?? ''}
+                    onChange={(e) => {
+                      const newPresets = { ...settings.promptPresets };
+                      if (newPresets[settings.promptPreset]) {
+                        newPresets[settings.promptPreset].content = e.target.value;
+                        updateSetting('promptPresets', newPresets);
+                      }
+                    }}
+                    placeholder="e.g., 'Suggest entries for places {{user}} visited.'"
+                    rows={4}
+                    style={{ marginTop: '5px', width: '100%' }}
                   />
-                ))}
+                  <STButton
+                    onClick={() => handleGeneration()}
+                    disabled={isGenerating}
+                    className="menu_button interactable"
+                    style={{ marginTop: '5px' }}
+                  >
+                    {isGenerating ? 'Generating...' : 'Send Prompt'}
+                  </STButton>
+                </div>
+
+                <div className="card">
+                  <div className="tab-header">
+                    <button
+                      className={rightTab === 'suggestions' ? 'active' : ''}
+                      onClick={() => setRightTab('suggestions')}
+                    >
+                      Suggested Entries
+                    </button>
+                    <button className={rightTab === 'preview' ? 'active' : ''} onClick={() => setRightTab('preview')}>
+                      Preview Prompt
+                    </button>
+                  </div>
+                  {rightTab === 'suggestions' && (
+                    <>
+                      <div className="actions">
+                        <STButton
+                          onClick={handleAddAll}
+                          disabled={isGenerating || suggestedEntriesList.length === 0}
+                          className="menu_button interactable"
+                        >
+                          Add All
+                        </STButton>
+                        <STButton onClick={handleReset} disabled={isGenerating} className="menu_button interactable">
+                          Reset
+                        </STButton>
+                      </div>
+                      <div>
+                        {suggestedEntriesList.length === 0 && <p>No suggestions yet. Send a prompt to get started!</p>}
+                        {suggestedEntriesList.map(({ worldName, entry }) => (
+                          <SuggestedEntry
+                            key={`${worldName}-${entry.uid}-${entry.comment}`}
+                            initialWorldName={worldName}
+                            entry={entry}
+                            allWorldNames={allWorldNames}
+                            existingEntry={entriesGroupByWorldName[worldName]?.find((e) => e.uid === entry.uid)}
+                            sessionRegexIds={session.regexIds}
+                            onAdd={handleAddSingleEntry}
+                            onRemove={handleRemoveEntry}
+                            onContinue={handleGeneration}
+                            onUpdate={handleUpdateEntry}
+                            entriesGroupByWorldName={entriesGroupByWorldName}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {rightTab === 'preview' && (
+                    <>
+                      {isPreviewLoading && <p style={{ fontStyle: 'italic' }}>Loading...</p>}
+                      <div className="preview-container">
+                        <STTextarea readOnly value={previewText} style={{ width: '100%', height: '100%', flex: 1 }} />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
+        {activeTab === 'editor' && (
+          <LorebookEditor
+            entriesGroupByWorldName={entriesGroupByWorldName}
+            onSaveEntries={handleSaveEntries}
+            onDeleteEntries={handleDeleteEntries}
+            onRefreshEntries={loadData}
+          />
+        )}
       </div>
       {isSelectingEntries && (
         <Popup
@@ -913,7 +1261,6 @@ export const MainPopup: FC = () => {
               ref={selectEntriesPopupRef}
               entriesByWorldName={entriesForSelectionPopup}
               initialSelectedUids={session.selectedEntryUids}
-              title="Select Entries to Include in Context"
             />
           }
           onComplete={(confirmed) => {
@@ -922,27 +1269,6 @@ export const MainPopup: FC = () => {
               setSession((prev) => ({ ...prev, selectedEntryUids: newSelection }));
             }
             setIsSelectingEntries(false);
-          }}
-          options={{ wide: true }}
-        />
-      )}
-      {isImporting && (
-        <Popup
-          type={POPUP_TYPE.CONFIRM}
-          content={
-            <SelectEntriesPopup
-              ref={importPopupRef}
-              entriesByWorldName={entriesGroupByWorldName}
-              initialSelectedUids={{}}
-              title="Select Entries to Import for Revision"
-            />
-          }
-          onComplete={(confirmed) => {
-            if (confirmed && importPopupRef.current) {
-              const selection = importPopupRef.current.getSelection();
-              handleImportEntries(selection);
-            }
-            setIsImporting(false);
           }}
           options={{ wide: true }}
         />

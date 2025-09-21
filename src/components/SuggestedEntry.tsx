@@ -1,33 +1,39 @@
 import { FC, useState, useMemo, useRef } from 'react';
 import showdown from 'showdown';
 import { STButton, Popup, STTextarea } from 'sillytavern-utils-lib/components';
-import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { CompareEntryPopup } from './CompareEntryPopup.js';
 import { EditEntryPopup, EditEntryPopupRef } from './EditEntryPopup.js';
+import { ExtendedWIEntry, POSITION_OPTIONS, ROLE_AT_DEPTH } from '../types.js';
 
 const converter = new showdown.Converter();
 
+const getPositionLabel = (pos?: number) =>
+  POSITION_OPTIONS.find((p) => p.value === pos)?.label ?? 'N/A';
+
+const getRoleLabel = (role?: number | null) =>
+  ROLE_AT_DEPTH.find((r) => r.value === role)?.label ?? 'N/A';
+
 export interface SuggestedEntryProps {
   initialWorldName: string;
-  entry: WIEntry;
+  entry: ExtendedWIEntry;
   allWorldNames: string[];
-  existingEntry?: WIEntry;
+  existingEntry?: ExtendedWIEntry;
   sessionRegexIds: Record<string, Partial<RegexScriptData>>;
-  entriesGroupByWorldName: Record<string, WIEntry[]>;
-  onAdd: (entry: WIEntry, initialWorldName: string, selectedTargetWorld: string) => void;
-  onRemove: (entry: WIEntry, initialWorldName: string, isBlacklist: boolean) => void;
+  entriesGroupByWorldName: Record<string, ExtendedWIEntry[]>;
+  onAdd: (entry: ExtendedWIEntry, initialWorldName: string, selectedTargetWorld: string) => void;
+  onRemove: (entry: ExtendedWIEntry, initialWorldName: string, isBlacklist: boolean) => void;
   onContinue: (continueFrom: {
     worldName: string;
-    entry: WIEntry;
+    entry: ExtendedWIEntry;
     prompt: string;
     mode: 'continue' | 'revise';
   }) => void;
   onUpdate: (
     worldName: string,
-    originalEntry: WIEntry,
-    updatedEntry: WIEntry,
+    originalEntry: ExtendedWIEntry,
+    updatedEntry: ExtendedWIEntry,
     updatedRegexIds: Record<string, Partial<RegexScriptData>>,
   ) => void;
 }
@@ -63,8 +69,22 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
   const editPopupRef = useRef<EditEntryPopupRef>(null);
 
   const isUpdate = useMemo(
-    () => !!entriesGroupByWorldName[selectedWorld]?.find((e) => e.uid === entry.uid && e.comment === entry.comment),
-    [selectedWorld, entry.uid, entry.comment, entriesGroupByWorldName],
+    () =>
+      !!entriesGroupByWorldName[selectedWorld]?.some(
+        (e) =>
+          e.uid === entry.uid ||
+          e.comment === entry.comment ||
+          e.key?.join('\u0000') === entry.key?.join('\u0000') ||
+          e.content === entry.content,
+      ),
+    [
+      selectedWorld,
+      entriesGroupByWorldName,
+      entry.uid,
+      entry.comment,
+      entry.key,
+      entry.content,
+    ],
   );
 
   const isActing = isContinuing || isRevising;
@@ -149,6 +169,17 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
         </div>
         <h4 className="comment">{entry.comment}</h4>
         <div className="key">{entry.key.join(', ')}</div>
+        <div className="metadata" style={{ fontSize: '0.9em', color: '#666' }}>
+          {entry.position !== undefined && (
+            <div>Position: {getPositionLabel(entry.position)}</div>
+          )}
+          {entry.depth !== undefined && entry.depth !== null && (
+            <div>Depth: {entry.depth}</div>
+          )}
+          {entry.roleAtDepth !== undefined && entry.roleAtDepth !== null && (
+            <div>Role: {getRoleLabel(entry.roleAtDepth)}</div>
+          )}
+        </div>
         <p className="content" dangerouslySetInnerHTML={{ __html: converter.makeHtml(entry.content ?? '') }}></p>
         <div className="continue-prompt-section" style={{ marginTop: '10px' }}>
           <STTextarea

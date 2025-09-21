@@ -6,13 +6,16 @@ import {
   DEFAULT_SUGGESTED_LOREBOOKS,
   DEFAULT_XML_DESCRIPTION,
   DEFAULT_TASK_DESCRIPTION,
+  DEFAULT_CONNECTION_PROFILE_PROMPT,
+  DEFAULT_CHAT_HISTORY_PROMPT,
 } from './constants.js';
 import { globalContext } from './generate.js';
 import { st_echo } from 'sillytavern-utils-lib/config';
 
 export const extensionName = 'SillyTavern-WorldInfo-Recommender';
-export const VERSION = '0.1.5';
-export const FORMAT_VERSION = 'F_1.2';
+export const extensionDisplayName = 'World Info Recommender & Lorebook Editor+';
+export const VERSION = '0.1.8';
+export const FORMAT_VERSION = 'F_1.3';
 
 export const KEYS = {
   EXTENSION: 'worldInfoRecommender',
@@ -66,6 +69,8 @@ export interface ExtensionSettings {
   maxResponseToken: number;
   contextToSend: ContextToSend;
   prompts: {
+    connectionProfile: PromptSetting;
+    chatHistory: PromptSetting;
     stDescription: PromptSetting;
     currentLorebooks: PromptSetting;
     blackListedEntries: PromptSetting;
@@ -81,6 +86,8 @@ export interface ExtensionSettings {
 }
 
 export type SystemPromptKey =
+  | 'connectionProfile'
+  | 'chatHistory'
   | 'stDescription'
   | 'currentLorebooks'
   | 'blackListedEntries'
@@ -89,6 +96,8 @@ export type SystemPromptKey =
   | 'taskDescription';
 
 export const SYSTEM_PROMPT_KEYS: Array<SystemPromptKey> = [
+  'connectionProfile',
+  'chatHistory',
   'stDescription',
   'currentLorebooks',
   'blackListedEntries',
@@ -98,6 +107,8 @@ export const SYSTEM_PROMPT_KEYS: Array<SystemPromptKey> = [
 ];
 
 export const DEFAULT_PROMPT_CONTENTS: Record<SystemPromptKey, string> = {
+  connectionProfile: DEFAULT_CONNECTION_PROFILE_PROMPT,
+  chatHistory: DEFAULT_CHAT_HISTORY_PROMPT,
   stDescription: DEFAULT_ST_DESCRIPTION,
   currentLorebooks: DEFAULT_CURRENT_LOREBOOKS,
   blackListedEntries: DEFAULT_BLACKLISTED_ENTRIES,
@@ -130,6 +141,16 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     suggestedEntries: true,
   },
   prompts: {
+    connectionProfile: {
+      label: 'Connection Profile Prompts',
+      content: DEFAULT_PROMPT_CONTENTS.connectionProfile,
+      isDefault: true,
+    },
+    chatHistory: {
+      label: 'Chat History',
+      content: DEFAULT_PROMPT_CONTENTS.chatHistory,
+      isDefault: true,
+    },
     stDescription: {
       label: 'SillyTavern Description',
       content: DEFAULT_PROMPT_CONTENTS.stDescription,
@@ -172,7 +193,12 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     default: {
       prompts: [
         {
-          promptName: 'chatHistory', // this is exception, since chat history is not exactly a prompt
+          promptName: 'connectionProfile',
+          enabled: true,
+          role: 'system',
+        },
+        {
+          promptName: 'chatHistory',
           enabled: true,
           role: 'system',
         },
@@ -289,6 +315,64 @@ export async function initializeSettings(): Promise<void> {
                 // Otherwise, it's a custom prompt, so just mark it as not default.
                 migrated.prompts.taskDescription.isDefault = false;
               }
+
+              return migrated;
+            },
+          },
+          {
+            from: 'F_1.2',
+            to: 'F_1.3',
+            action(previous) {
+              const migrated = { ...previous };
+              migrated.formatVersion = 'F_1.3';
+
+              if (!migrated.prompts.connectionProfile) {
+                migrated.prompts.connectionProfile = {
+                  label: 'Connection Profile Prompts',
+                  content: DEFAULT_PROMPT_CONTENTS.connectionProfile,
+                  isDefault: true,
+                };
+              }
+
+              if (!migrated.prompts.chatHistory) {
+                migrated.prompts.chatHistory = {
+                  label: 'Chat History',
+                  content: DEFAULT_PROMPT_CONTENTS.chatHistory,
+                  isDefault: true,
+                };
+              }
+
+              Object.values(migrated.mainContextTemplatePresets).forEach(
+                (preset: any) => {
+                  const blocks = preset.prompts as MainContextPromptBlock[];
+                  const hasCP = blocks.some(
+                    (b) => b.promptName === 'connectionProfile',
+                  );
+                  const hasCH = blocks.some(
+                    (b) => b.promptName === 'chatHistory',
+                  );
+
+                  if (!hasCP) {
+                    blocks.unshift({
+                      promptName: 'connectionProfile',
+                      enabled: true,
+                      role: 'system',
+                    });
+                  }
+
+                  if (!hasCH) {
+                    const cpIndex = blocks.findIndex(
+                      (b) => b.promptName === 'connectionProfile',
+                    );
+                    const insertIndex = cpIndex !== -1 ? cpIndex + 1 : 0;
+                    blocks.splice(insertIndex, 0, {
+                      promptName: 'chatHistory',
+                      enabled: true,
+                      role: 'system',
+                    });
+                  }
+                },
+              );
 
               return migrated;
             },
