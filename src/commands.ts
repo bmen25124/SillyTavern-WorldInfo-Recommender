@@ -13,11 +13,6 @@ import {
 } from './generate.js';
 import { ContextToSend, settingsManager } from './settings.js';
 
-let popupIcon: HTMLDivElement | undefined;
-export function setPopupIcon(icon: HTMLDivElement) {
-  popupIcon = icon;
-}
-
 export function initializeCommands() {
   /**
    * Parses a string or array of strings into a list, handling various quoting styles.
@@ -85,9 +80,10 @@ export function initializeCommands() {
       helpString: 'Open World Info Recommender popup',
       unnamedArgumentList: [],
       callback: async (_args: any, _value: any) => {
-        if (popupIcon) {
-          popupIcon.dispatchEvent(new Event('click', { bubbles: true }));
-          return true;
+        // @ts-ignore
+        if (window.openWorldInfoRecommenderPopup) {
+          // @ts-ignore
+          window.openWorldInfoRecommenderPopup();
         }
 
         return false;
