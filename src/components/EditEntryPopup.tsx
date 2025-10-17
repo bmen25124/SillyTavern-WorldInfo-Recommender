@@ -52,7 +52,7 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
     const initialItems = Object.entries(initialRegexIds)
       .map(([id, data]) => {
         const regex = loadedRegexes.find((r) => r.id === id);
-        return regex ? { id: regex.id, label: regex.scriptName, enabled: !data.disabled } : null;
+        return regex ? { id: regex.id, label: regex.scriptName, enabled: !data?.disabled } : null;
       })
       // @ts-ignore
       .filter((item): item is SortableListItemData => item !== null);

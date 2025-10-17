@@ -83,10 +83,10 @@ export async function runWorldInfoRecommendation({
     Object.entries(entriesGroupByWorldName)
       .filter(
         ([worldName, entries]) =>
-          entries.length > 0 && session.selectedWorldNames.includes(worldName) && entries.some((e) => !e.disable),
+          entries.length > 0 && session.selectedWorldNames.includes(worldName) && entries.some((e) => !e?.disable),
       )
       .forEach(([worldName, entries]) => {
-        let filteredEntries = entries.filter((e) => !e.disable);
+        let filteredEntries = entries.filter((e) => !e?.disable);
 
         const selectedUidsForWorld = session.selectedEntryUids?.[worldName];
         // If there's a selection for this specific world and it's not empty, filter by it.
