@@ -43,3 +43,9 @@ You should test it, but my guess is no. Because the model needs to give _XML_ ou
 >Can you suggest a model?
 
 Gemini models are cheap, fast, and efficient. I usually use Gemini Flash 2.0. But most decent models should work fine.
+
+> I'm getting "No results from AI/Invalid XML" error.
+
+- Make sure your max response tokens is set high enough to accommodate the response. Try increasing it to 2000/more. Or prompt the entry limit to a smaller number. Like _Only give me maximum 2 entries._
+- Do not try to use a fancy chat completion preset. They are made for RP. Not for generating structured XML output. So just create a connection profile with default preset.
+- As I said in the first question, make sure your model is capable of generating structured XML output.
