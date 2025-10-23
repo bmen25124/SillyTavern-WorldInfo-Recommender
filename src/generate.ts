@@ -179,6 +179,9 @@ export async function runWorldInfoRecommendation({
   // console.log("Received content:", response.content);
 
   const assistantMessageForContinue = messages.find((m) => m.role === 'assistant');
+  if (!response.content) {
+    return {};
+  }
   let parsedEntries = parseXMLOwn(response.content, {
     // Only merge with previous content if we are in 'continue' mode.
     previousContent:
