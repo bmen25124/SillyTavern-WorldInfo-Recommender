@@ -58,9 +58,9 @@ export async function buildInitialReviseMessages(
   }
 
   for (const block of preset.prompts) {
-    if (!block.enabled || block.promptName === 'responseRules') continue;
+    if (!block.enabled) continue;
 
-    if (block.promptName === 'taskDescription') continue;
+    if (['taskDescription', 'responseRules', 'currentLorebooks'].includes(block.promptName)) continue;
 
     if (block.promptName === 'chatHistory') {
       initialMessages.push({

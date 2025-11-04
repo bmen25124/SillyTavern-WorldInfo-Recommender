@@ -26,6 +26,7 @@ import { CurrentStatePopup } from './CurrentStatePopup.js';
 import { BuildPromptOptions, buildPrompt } from 'sillytavern-utils-lib';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 import { GlobalStatePopup } from './GlobalStatePopup.js';
+import * as Handlebars from 'handlebars';
 
 const globalContext = SillyTavern.getContext();
 
@@ -211,14 +212,43 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
           }
         }
 
-        let newSnapshot: ReviseState;
-        let justification: string;
-
         const lastState =
           messagesToSend
             .slice(0, messagesToSend.length - (isRegeneration ? 0 : 1))
             .reverse()
             .find((m) => m.stateSnapshot)?.stateSnapshot ?? initialState;
+
+        let stateContent = '';
+        if (session.type === 'global') {
+          const template = settings.prompts.currentLorebooks?.content;
+          if (template) {
+            const templateData = { currentLorebooks: lastState };
+            stateContent = Handlebars.compile(template, { noEscape: true })(templateData);
+          }
+        } else {
+          // 'entry'
+          const entry = lastState as WIEntry;
+          stateContent = `The following is the current state of the single lorebook entry you are editing. Base your response on this current state.\n\n## WORLD NAME: ${session.worldName}\n### (NAME: ${entry.comment})\nTriggers: ${(entry.key || []).join(', ')}\nContent: ${entry.content}`;
+        }
+
+        stateContent = globalContext.substituteParams(stateContent.trim());
+
+        if (stateContent) {
+          const stateMessage: ReviseMessage = {
+            id: `temp-state-${Date.now()}`,
+            role: 'system',
+            content: stateContent,
+          };
+
+          const lastMessage = finalMessagesForRequest.pop();
+          finalMessagesForRequest.push(stateMessage);
+          if (lastMessage) {
+            finalMessagesForRequest.push(lastMessage);
+          }
+        }
+
+        let newSnapshot: ReviseState;
+        let justification: string;
 
         if (session.type === 'entry') {
           const response = await makeStructuredRequest(
