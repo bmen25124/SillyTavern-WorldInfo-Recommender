@@ -32,7 +32,13 @@ To open the recommender popup, click the extension icon:
 
 ## Demo Video
 
+**Simple Usage:**
+
 https://github.com/user-attachments/assets/a26c8e44-7087-42df-9afa-7f7a2c752359
+
+**Chat with LLM:**
+
+https://github.com/user-attachments/assets/eb78f7ca-8a5a-4119-a44a-9857f22ec350
 
 ## FAQ
 
