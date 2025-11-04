@@ -19,7 +19,7 @@ import {
 } from '../revise-types.js';
 import { makeStructuredRequest } from '../request.js';
 import { settingsManager, PromptEngineeringMode } from '../settings.js';
-import { st_echo, st_createWorldInfoEntry } from 'sillytavern-utils-lib/config';
+import { st_echo, st_createWorldInfoEntry, selected_group, this_chid } from 'sillytavern-utils-lib/config';
 import { CompareStatePopup } from './CompareStatePopup.js';
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { CurrentStatePopup } from './CurrentStatePopup.js';
@@ -303,9 +303,14 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
           (p: any) => p.id === session.profileId,
         );
         const selectedApi = profile?.api ? globalContext.CONNECT_API_MAP[profile.api].selected : undefined;
+        if (!selectedApi) {
+          st_echo('warning', 'No API selected for this session.');
+          return;
+        }
 
         for (const message of messagesToSend) {
-          if (message.id === CHAT_HISTORY_PLACEHOLDER_ID && selectedApi) {
+          if (message.id === CHAT_HISTORY_PLACEHOLDER_ID) {
+            if (this_chid === undefined && !selected_group) continue;
             const prompt = await buildPrompt(selectedApi, chatContextOptions);
             if (prompt.warnings?.length) prompt.warnings.forEach((w) => st_echo('warning', w));
             finalMessagesForRequest.push(...(prompt.result as ReviseMessage[]));

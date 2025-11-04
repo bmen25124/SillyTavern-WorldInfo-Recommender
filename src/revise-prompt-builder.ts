@@ -3,6 +3,7 @@ import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 import { ReviseMessage, CHAT_HISTORY_PLACEHOLDER_ID, ReviseSessionType } from './revise-types.js';
 import { ExtensionSettings, settingsManager } from './settings.js';
 import { globalContext, Session } from './generate.js';
+import { selected_group, this_chid } from 'sillytavern-utils-lib/config';
 
 export async function buildInitialReviseMessages(
   initialState: WIEntry | Record<string, WIEntry[]>,
@@ -61,6 +62,7 @@ export async function buildInitialReviseMessages(
     if (!block.enabled) continue;
 
     if (['taskDescription', 'responseRules', 'currentLorebooks'].includes(block.promptName)) continue;
+    if (this_chid === undefined && !selected_group && block.promptName === 'chatHistory') continue;
 
     if (block.promptName === 'chatHistory') {
       initialMessages.push({
