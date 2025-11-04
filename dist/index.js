@@ -25437,12 +25437,14 @@ Content: ${Oe.content}`;
     );
   }, [p, g, f, L]), P = se.useCallback(async () => {
     if (g || f.length === 0) return;
-    const H = f[f.length - 1].role === "assistant" ? f.slice(0, -1) : [...f], te = f;
-    await L(
+    const Y = f;
+    let H = [...f];
+    const te = f.findLastIndex((ne) => !ne.isStateUpdate);
+    te > -1 && f[te].role === "assistant" && (H = f.slice(0, te)), await L(
       H,
       !0,
       () => m(H),
-      () => m(te)
+      () => m(Y)
     );
   }, [g, f, L]), Z = () => {
     const Y = f.slice().reverse().find((H) => H.stateSnapshot)?.stateSnapshot ?? u;
