@@ -8,8 +8,8 @@ import {
   PresetItem,
   DropdownItem as FancyDropdownItem,
   Popup,
-} from 'sillytavern-utils-lib/components';
-import { BuildPromptOptions, getActiveWorldInfo } from 'sillytavern-utils-lib';
+} from 'sillytavern-utils-lib/components/react';
+import { BuildPromptOptions, getWorldInfos } from 'sillytavern-utils-lib';
 import {
   groups,
   selected_group,
@@ -20,35 +20,49 @@ import {
   world_names,
 } from 'sillytavern-utils-lib/config';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
-
 import { runWorldInfoRecommendation, Session } from '../generate.js';
 import { ExtensionSettings, settingsManager } from '../settings.js';
 import { Character } from 'sillytavern-utils-lib/types';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
 import { SuggestedEntry } from './SuggestedEntry.js';
-// @ts-ignore
-import { Handlebars } from '../../../../../lib.js';
+import * as Handlebars from 'handlebars';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
 import { SelectEntriesPopup, SelectEntriesPopupRef } from './SelectEntriesPopup.js';
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
+import { ReviseSessionManager } from './ReviseSessionManager.js';
 
 if (!Handlebars.helpers['join']) {
   Handlebars.registerHelper('join', function (array: any, separator: any) {
-    return array.join(separator);
+    if (Array.isArray(array)) {
+      return array.join(typeof separator === 'string' ? separator : ', ');
+    }
+    return '';
+  });
+}
+
+if (!Handlebars.helpers['is_not_empty']) {
+  Handlebars.registerHelper('is_not_empty', function (this: any, value: any, options: any) {
+    if (!value) {
+      return options.inverse(this);
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0 ? options.fn(this) : options.inverse(this);
+    }
+    if (typeof value === 'object' && Object.keys(value).length > 0) {
+      return options.fn(this);
+    }
+    if (typeof value !== 'object' && !Array.isArray(value)) {
+      return options.fn(this);
+    }
+    return options.inverse(this);
   });
 }
 
 const globalContext = SillyTavern.getContext();
 
-// Helper to get current character/group avatar filename
 const getAvatar = () => (this_chid ? st_getCharaFilename(this_chid) : selected_group);
 
-/**
- * A React component for the main World Info Recommender popup UI.
- * This component replaces the vanilla TS popup script.
- */
 export const MainPopup: FC = () => {
-  // --- State Management ---
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
   const [session, setSession] = useState<Session>({
@@ -65,13 +79,13 @@ export const MainPopup: FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSelectingEntries, setIsSelectingEntries] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isGlobalReviseOpen, setIsGlobalReviseOpen] = useState(false);
 
   const selectEntriesPopupRef = useRef<SelectEntriesPopupRef>(null);
   const importPopupRef = useRef<SelectEntriesPopupRef>(null);
 
   const avatarKey = useMemo(() => getAvatar() ?? '_global', [this_chid, selected_group]);
 
-  // --- Data Loading Effect ---
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -82,7 +96,6 @@ export const MainPopup: FC = () => {
       const avatar = getAvatar();
       const key = `worldInfoRecommend_${avatarKey}`;
 
-      // Load session from localStorage
       const savedSession: Partial<Session> = JSON.parse(localStorage.getItem(key) ?? '{}');
       const initialSession: Session = {
         suggestedEntries: savedSession.suggestedEntries ?? {},
@@ -92,11 +105,10 @@ export const MainPopup: FC = () => {
         regexIds: savedSession.regexIds ?? {},
       };
 
-      // Load World Info
       let loadedEntries: Record<string, WIEntry[]> = {};
       if (avatar) {
         if (selected_group) {
-          const groupWorldInfo = await getActiveWorldInfo(['chat', 'persona', 'global']);
+          const groupWorldInfo = await getWorldInfos(['chat', 'persona', 'global'], true);
           if (groupWorldInfo) loadedEntries = groupWorldInfo;
 
           const group = groups.find((g: any) => g.id === selected_group);
@@ -104,13 +116,13 @@ export const MainPopup: FC = () => {
             for (const member of group.members) {
               const index = globalContext.characters.findIndex((c: Character) => c.avatar === member);
               if (index !== -1) {
-                const worldInfo = await getActiveWorldInfo(['character'], index);
+                const worldInfo = await getWorldInfos(['character'], true, index);
                 if (worldInfo) loadedEntries = { ...loadedEntries, ...worldInfo };
               }
             }
           }
         } else {
-          loadedEntries = await getActiveWorldInfo(['all'], this_chid);
+          loadedEntries = await getWorldInfos(['all'], true, this_chid);
         }
       } else {
         for (const worldName of world_names) {
@@ -122,7 +134,6 @@ export const MainPopup: FC = () => {
       const loadedWorldNames = Object.keys(loadedEntries);
       setAllWorldNames(loadedWorldNames);
 
-      // Sync session's selected worlds with available worlds
       if (initialSession.selectedWorldNames.length === 0 && avatarKey !== '_global') {
         initialSession.selectedWorldNames = [...loadedWorldNames];
       } else {
@@ -131,7 +142,6 @@ export const MainPopup: FC = () => {
         );
       }
 
-      // Sync session's selected entry UIDs with available entries
       const validEntryUids: Record<string, number[]> = {};
       if (initialSession.selectedEntryUids) {
         for (const [worldName, uids] of Object.entries(initialSession.selectedEntryUids)) {
@@ -145,9 +155,8 @@ export const MainPopup: FC = () => {
         }
       }
       initialSession.selectedEntryUids = validEntryUids;
-      setSession(initialSession); // Set the fully loaded and synced session
+      setSession(initialSession);
 
-      // Load group members for char card selection if in group chat
       if (selected_group) {
         const group = groups.find((g: any) => g.id === selected_group);
         if (group?.generation_mode === 0) {
@@ -164,16 +173,13 @@ export const MainPopup: FC = () => {
     loadData();
   }, [avatarKey]);
 
-  // --- Session Saving Effect ---
   useEffect(() => {
     if (isLoading) return;
     const key = `worldInfoRecommend_${avatarKey}`;
     localStorage.setItem(key, JSON.stringify(session));
   }, [session, avatarKey, isLoading]);
 
-  // --- Generic Handlers ---
   const updateSetting = <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => {
-    // Direct mutation + force update
     settingsManager.getSettings()[key] = value;
     settingsManager.saveSettings();
     forceUpdate();
@@ -183,31 +189,17 @@ export const MainPopup: FC = () => {
     key: K,
     value: ExtensionSettings['contextToSend'][K],
   ) => {
-    // Direct mutation + force update
     settingsManager.getSettings().contextToSend[key] = value;
     settingsManager.saveSettings();
     forceUpdate();
   };
 
-  // --- Memoized Derived Data for UI ---
-  const promptPresetItems = useMemo(
-    (): PresetItem[] => Object.keys(settings.promptPresets).map((key) => ({ value: key, label: key })),
-    [settings.promptPresets],
-  );
-
-  const worldInfoDropdownItems = useMemo(
-    (): FancyDropdownItem[] => allWorldNames.map((name) => ({ value: name, label: name })),
-    [allWorldNames],
-  );
-
-  const totalSelectedEntries = useMemo(
-    () => Object.values(session.selectedEntryUids).reduce((sum, uids) => sum + uids.length, 0),
-    [session.selectedEntryUids],
-  );
-
-  // --- Core Logic Callbacks ---
   const addEntry = useCallback(
-    async (entry: WIEntry, selectedWorldName: string, skipSave: boolean = false): Promise<'added' | 'updated'> => {
+    async (
+      entry: WIEntry,
+      selectedWorldName: string,
+      skipSave: boolean = false,
+    ): Promise<'added' | 'updated' | 'unchanged'> => {
       const worldInfoCopy = structuredClone(entriesGroupByWorldName);
       if (!worldInfoCopy[selectedWorldName]) {
         worldInfoCopy[selectedWorldName] = [];
@@ -218,6 +210,15 @@ export const MainPopup: FC = () => {
       let targetEntry: WIEntry;
 
       if (isUpdate) {
+        // This is an update. Check if anything actually changed.
+        const contentChanged = (entry.content || '') !== (existingEntry!.content || '');
+        const commentChanged = (entry.comment || '') !== (existingEntry!.comment || '');
+        const keysChanged =
+          (entry.key || []).slice().sort().join(',') !== (existingEntry!.key || []).slice().sort().join(',');
+
+        if (!contentChanged && !commentChanged && !keysChanged) {
+          return 'unchanged'; // Nothing to do.
+        }
         targetEntry = existingEntry!;
       } else {
         const stFormat = { entries: Object.fromEntries(worldInfoCopy[selectedWorldName].map((e) => [e.uid, e])) };
@@ -245,10 +246,8 @@ export const MainPopup: FC = () => {
     async (continueFrom?: { worldName: string; entry: WIEntry; prompt: string; mode: 'continue' | 'revise' }) => {
       if (!settings.profileId) return st_echo('warning', 'Please select a connection profile.');
 
-      // Determine the prompt: use the specific one from the entry if provided, otherwise use the global one.
       const userPrompt = continueFrom?.prompt ?? settings.promptPresets[settings.promptPreset].content;
 
-      // For a global generation, the prompt must not be empty. For entry-specific actions, it can be.
       if (!continueFrom && !userPrompt) {
         return st_echo('warning', 'Please enter a prompt.');
       }
@@ -344,7 +343,6 @@ export const MainPopup: FC = () => {
                 );
 
                 if (entryIndex !== -1) {
-                  // Replace the old entry with the updated one
                   newSuggested[worldName][entryIndex] = updatedEntry;
                 }
               }
@@ -355,7 +353,6 @@ export const MainPopup: FC = () => {
               const newSuggested = structuredClone(prev.suggestedEntries);
               for (const [worldName, entries] of Object.entries(resultingEntries)) {
                 if (!newSuggested[worldName]) newSuggested[worldName] = [];
-                // Avoid adding duplicates
                 for (const entry of entries) {
                   if (!newSuggested[worldName].some((e) => e.uid === entry.uid && e.comment === entry.comment)) {
                     newSuggested[worldName].push(entry);
@@ -378,13 +375,16 @@ export const MainPopup: FC = () => {
     [settings, session, entriesGroupByWorldName],
   );
 
-  // --- UI Action Handlers ---
   const handleAddSingleEntry = useCallback(
     async (entry: WIEntry, worldName: string, selectedTargetWorld: string) => {
       try {
         const status = await addEntry(entry, selectedTargetWorld);
-        st_echo('success', status === 'added' ? 'Entry added' : 'Entry updated');
-        // Remove from suggested list
+        if (status === 'unchanged') {
+          st_echo('info', `No changes detected for "${entry.comment}". Entry was not updated.`);
+        } else {
+          st_echo('success', status === 'added' ? 'Entry added' : 'Entry updated');
+        }
+
         setSession((prev) => {
           const newSuggested = { ...prev.suggestedEntries };
           if (newSuggested[worldName]) {
@@ -415,6 +415,7 @@ export const MainPopup: FC = () => {
     setIsGenerating(true);
     let addedCount = 0;
     let updatedCount = 0;
+    let unchangedCount = 0;
     const modifiedWorlds = new Set<string>();
     const entriesToAdd: { worldName: string; entry: WIEntry }[] = [];
 
@@ -429,8 +430,12 @@ export const MainPopup: FC = () => {
       try {
         const status = await addEntry(entry, worldName, true);
         if (status === 'added') addedCount++;
-        else updatedCount++;
-        modifiedWorlds.add(worldName);
+        else if (status === 'updated') updatedCount++;
+        else unchangedCount++;
+
+        if (status !== 'unchanged') {
+          modifiedWorlds.add(worldName);
+        }
       } catch (error) {
         st_echo('error', `Failed to process entry: ${entry.comment}`);
       }
@@ -447,7 +452,7 @@ export const MainPopup: FC = () => {
     }
 
     setSession((prev) => ({ ...prev, suggestedEntries: {} }));
-    st_echo('success', `Processed ${addedCount} new and ${updatedCount} updated entries.`);
+    st_echo('success', `Processed: ${addedCount} new, ${updatedCount} updated, ${unchangedCount} unchanged.`);
     setIsGenerating(false);
   };
 
@@ -487,24 +492,26 @@ export const MainPopup: FC = () => {
 
   const handleUpdateEntry = (
     worldName: string,
-    originalEntry: WIEntry, // <-- Add this parameter
+    originalEntry: WIEntry,
     updatedEntry: WIEntry,
-    updatedRegexIds: Record<string, Partial<RegexScriptData>>,
+    updatedRegexIds?: Record<string, Partial<RegexScriptData>>,
   ) => {
     setSession((prev) => {
       const newSuggested = { ...prev.suggestedEntries };
       if (newSuggested[worldName]) {
-        // Use the ORIGINAL entry's comment and uid to find the correct item
         const entryIndex = newSuggested[worldName].findIndex(
           (e) => e.uid === originalEntry.uid && e.comment === originalEntry.comment,
         );
 
         if (entryIndex !== -1) {
-          // If found, replace it with the updated entry
           newSuggested[worldName][entryIndex] = updatedEntry;
         }
       }
-      return { ...prev, suggestedEntries: newSuggested, regexIds: updatedRegexIds };
+      const newSessionState = { ...prev, suggestedEntries: newSuggested };
+      if (updatedRegexIds) {
+        newSessionState.regexIds = updatedRegexIds;
+      }
+      return newSessionState;
     });
   };
 
@@ -521,7 +528,6 @@ export const MainPopup: FC = () => {
           }
 
           for (const uid of uids) {
-            // Check if already in suggestions for that world
             const alreadySuggested = newSuggested[worldName].some((e) => e.uid === uid);
             if (alreadySuggested) continue;
 
@@ -551,7 +557,101 @@ export const MainPopup: FC = () => {
     return result;
   }, [session.selectedWorldNames, entriesGroupByWorldName]);
 
-  // --- Render ---
+  const entriesForGlobalRevise = useMemo(() => {
+    const mergedState: Record<string, WIEntry[]> = JSON.parse(JSON.stringify(entriesForSelectionPopup));
+    const suggestedByUid = new Map<number, { worldName: string; entry: WIEntry }>();
+
+    Object.entries(session.suggestedEntries).forEach(([worldName, entries]) => {
+      entries.forEach((entry) => {
+        if (entry.uid) {
+          suggestedByUid.set(entry.uid, { worldName, entry });
+        }
+      });
+    });
+
+    Object.entries(mergedState).forEach(([, entries]) => {
+      entries.forEach((existingEntry, index) => {
+        if (existingEntry.uid && suggestedByUid.has(existingEntry.uid)) {
+          entries[index] = suggestedByUid.get(existingEntry.uid)!.entry;
+          suggestedByUid.delete(existingEntry.uid);
+        }
+      });
+    });
+
+    suggestedByUid.forEach(({ worldName, entry }) => {
+      if (!mergedState[worldName]) {
+        mergedState[worldName] = [];
+      }
+      if (!mergedState[worldName].some((e) => e.uid === entry.uid)) {
+        mergedState[worldName].push(entry);
+      }
+    });
+
+    return mergedState;
+  }, [entriesForSelectionPopup, session.suggestedEntries]);
+
+  const handleApplyGlobalRevise = (newState: Record<string, WIEntry[]>) => {
+    // Create a map of all original entries for efficient lookup. Key is "worldName::uid".
+    const originalEntriesMap = new Map<string, WIEntry>();
+    Object.entries(entriesGroupByWorldName).forEach(([worldName, entries]) => {
+      entries.forEach((entry) => {
+        originalEntriesMap.set(`${worldName}::${entry.uid}`, entry);
+      });
+    });
+
+    const newSuggestedEntries: Record<string, WIEntry[]> = {};
+
+    // Iterate through the state returned by the revise session.
+    Object.entries(newState).forEach(([worldName, entries]) => {
+      entries.forEach((revisedEntry) => {
+        const compositeKey = `${worldName}::${revisedEntry.uid}`;
+        const originalEntry = originalEntriesMap.get(compositeKey);
+
+        let isSuggestion = false;
+        if (!originalEntry) {
+          // The entry is new; it didn't exist in the original lorebooks.
+          isSuggestion = true;
+        } else {
+          // The entry existed. We must check if it was modified.
+          const contentChanged = (revisedEntry.content || '') !== (originalEntry.content || '');
+          const commentChanged = (revisedEntry.comment || '') !== (originalEntry.comment || '');
+          const keysChanged =
+            (revisedEntry.key || []).slice().sort().join(',') !== (originalEntry.key || []).slice().sort().join(',');
+
+          if (contentChanged || commentChanged || keysChanged) {
+            isSuggestion = true;
+          }
+        }
+
+        // If the entry is new or modified, add it to our list of suggestions.
+        if (isSuggestion) {
+          if (!newSuggestedEntries[worldName]) {
+            newSuggestedEntries[worldName] = [];
+          }
+          newSuggestedEntries[worldName].push(revisedEntry);
+        }
+      });
+    });
+
+    setSession((prev) => ({ ...prev, suggestedEntries: newSuggestedEntries }));
+    st_echo('success', 'Changes from global revise session applied.');
+  };
+
+  const promptPresetItems = useMemo(
+    (): PresetItem[] => Object.keys(settings.promptPresets).map((key) => ({ value: key, label: key })),
+    [settings.promptPresets],
+  );
+
+  const worldInfoDropdownItems = useMemo(
+    (): FancyDropdownItem[] => allWorldNames.map((name) => ({ value: name, label: name })),
+    [allWorldNames],
+  );
+
+  const totalSelectedEntries = useMemo(
+    () => Object.values(session.selectedEntryUids).reduce((sum, uids) => sum + uids.length, 0),
+    [session.selectedEntryUids],
+  );
+
   if (isLoading) {
     return <div>Loading...</div>;
   }
@@ -565,7 +665,6 @@ export const MainPopup: FC = () => {
       <div id="worldInfoRecommenderPopup">
         <h2>World Info Recommender</h2>
         <div className="container">
-          {/* Left Column */}
           <div className="column">
             <div className="card">
               <h3>Connection Profile</h3>
@@ -575,7 +674,6 @@ export const MainPopup: FC = () => {
                 onChange={(profile) => updateSetting('profileId', profile?.id)}
               />
             </div>
-
             <div className="card">
               <h3>Context to Send</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
@@ -587,8 +685,7 @@ export const MainPopup: FC = () => {
                   />
                   Description of SillyTavern and Lorebook
                 </label>
-                {/* Message Options */}
-                {avatarKey != '_global' && (
+                {avatarKey !== '_global' && (
                   <div className="message-options">
                     <h4>Messages to Include</h4>
                     <select
@@ -607,7 +704,6 @@ export const MainPopup: FC = () => {
                       <option value="last">Last X Messages</option>
                       <option value="range">Range</option>
                     </select>
-
                     {settings.contextToSend.messages.type === 'first' && (
                       <div style={{ marginTop: '10px' }}>
                         <label>
@@ -690,7 +786,6 @@ export const MainPopup: FC = () => {
                     )}
                   </div>
                 )}
-
                 <label className="checkbox_label">
                   <input
                     type="checkbox"
@@ -769,7 +864,6 @@ export const MainPopup: FC = () => {
                 </label>
               </div>
             </div>
-
             <div className="card">
               <label>
                 Max Context
@@ -784,7 +878,6 @@ export const MainPopup: FC = () => {
                   <option value="custom">Custom</option>
                 </select>
               </label>
-
               {settings.maxContextType === 'custom' && (
                 <label style={{ marginTop: '10px' }}>
                   <input
@@ -798,7 +891,6 @@ export const MainPopup: FC = () => {
                   />
                 </label>
               )}
-
               <label style={{ display: 'block', marginTop: '10px' }}>
                 Max Response Tokens
                 <input
@@ -812,7 +904,6 @@ export const MainPopup: FC = () => {
                 />
               </label>
             </div>
-
             <div className="card">
               <h3>Your Prompt</h3>
               <STPresetSelect
@@ -858,8 +949,6 @@ export const MainPopup: FC = () => {
               </STButton>
             </div>
           </div>
-
-          {/* Right Column */}
           <div className="wide-column">
             <div className="card">
               <h3>Suggested Entries</h3>
@@ -870,6 +959,14 @@ export const MainPopup: FC = () => {
                   className="menu_button interactable"
                 >
                   Add All
+                </STButton>
+                <STButton
+                  onClick={() => setIsGlobalReviseOpen(true)}
+                  disabled={isGenerating}
+                  className="menu_button interactable"
+                  title="Revise all selected existing entries and current suggestions in a single chat session"
+                >
+                  <i className="fa-solid fa-comments"></i> Global Revise
                 </STButton>
                 <STButton
                   onClick={() => setIsImporting(true)}
@@ -898,6 +995,8 @@ export const MainPopup: FC = () => {
                     onContinue={handleGeneration}
                     onUpdate={handleUpdateEntry}
                     entriesGroupByWorldName={entriesGroupByWorldName}
+                    sessionForContext={session}
+                    contextToSend={settings.contextToSend}
                   />
                 ))}
               </div>
@@ -945,6 +1044,24 @@ export const MainPopup: FC = () => {
             setIsImporting(false);
           }}
           options={{ wide: true }}
+        />
+      )}
+      {isGlobalReviseOpen && (
+        <Popup
+          type={POPUP_TYPE.DISPLAY}
+          content={
+            <ReviseSessionManager
+              target={{ type: 'global' }}
+              initialState={entriesForGlobalRevise}
+              onClose={() => setIsGlobalReviseOpen(false)}
+              onApply={handleApplyGlobalRevise}
+              sessionForContext={session}
+              allEntries={entriesGroupByWorldName}
+              contextToSend={settings.contextToSend}
+            />
+          }
+          onComplete={() => setIsGlobalReviseOpen(false)}
+          options={{ wide: true, large: true }}
         />
       )}
     </>

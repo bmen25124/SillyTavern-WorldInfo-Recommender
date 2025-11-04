@@ -6,13 +6,16 @@ import {
   DEFAULT_SUGGESTED_LOREBOOKS,
   DEFAULT_XML_DESCRIPTION,
   DEFAULT_TASK_DESCRIPTION,
+  DEFAULT_REVISE_JSON_PROMPT,
+  DEFAULT_REVISE_XML_PROMPT,
+  DEFAULT_REVISE_TASK_DESCRIPTION,
 } from './constants.js';
 import { globalContext } from './generate.js';
 import { st_echo } from 'sillytavern-utils-lib/config';
 
 export const extensionName = 'SillyTavern-WorldInfo-Recommender';
-export const VERSION = '0.1.5';
-export const FORMAT_VERSION = 'F_1.2';
+export const VERSION = '0.2.0';
+export const FORMAT_VERSION = 'F_1.3';
 
 export const KEYS = {
   EXTENSION: 'worldInfoRecommender',
@@ -46,6 +49,7 @@ export interface PromptPreset {
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system';
+export type PromptEngineeringMode = 'native' | 'json' | 'xml';
 
 export interface MainContextPromptBlock {
   promptName: string;
@@ -65,6 +69,7 @@ export interface ExtensionSettings {
   maxContextValue: number;
   maxResponseToken: number;
   contextToSend: ContextToSend;
+  defaultPromptEngineeringMode: PromptEngineeringMode;
   prompts: {
     stDescription: PromptSetting;
     currentLorebooks: PromptSetting;
@@ -86,7 +91,10 @@ export type SystemPromptKey =
   | 'blackListedEntries'
   | 'suggestedLorebooks'
   | 'responseRules'
-  | 'taskDescription';
+  | 'taskDescription'
+  | 'reviseJsonPrompt'
+  | 'reviseXmlPrompt'
+  | 'reviseTaskDescription';
 
 export const SYSTEM_PROMPT_KEYS: Array<SystemPromptKey> = [
   'stDescription',
@@ -95,6 +103,9 @@ export const SYSTEM_PROMPT_KEYS: Array<SystemPromptKey> = [
   'suggestedLorebooks',
   'responseRules',
   'taskDescription',
+  'reviseJsonPrompt',
+  'reviseXmlPrompt',
+  'reviseTaskDescription',
 ];
 
 export const DEFAULT_PROMPT_CONTENTS: Record<SystemPromptKey, string> = {
@@ -104,6 +115,9 @@ export const DEFAULT_PROMPT_CONTENTS: Record<SystemPromptKey, string> = {
   suggestedLorebooks: DEFAULT_SUGGESTED_LOREBOOKS,
   responseRules: DEFAULT_XML_DESCRIPTION,
   taskDescription: DEFAULT_TASK_DESCRIPTION,
+  reviseJsonPrompt: DEFAULT_REVISE_JSON_PROMPT,
+  reviseXmlPrompt: DEFAULT_REVISE_XML_PROMPT,
+  reviseTaskDescription: DEFAULT_REVISE_TASK_DESCRIPTION,
 };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -129,6 +143,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     worldInfo: true,
     suggestedEntries: true,
   },
+  defaultPromptEngineeringMode: 'native',
   prompts: {
     stDescription: {
       label: 'SillyTavern Description',
@@ -159,6 +174,21 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       label: 'Task Description',
       content: DEFAULT_PROMPT_CONTENTS.taskDescription,
       isDefault: true,
+    },
+    reviseJsonPrompt: {
+      content: DEFAULT_PROMPT_CONTENTS.reviseJsonPrompt,
+      isDefault: true,
+      label: 'Revise Session (JSON Mode)',
+    },
+    reviseXmlPrompt: {
+      content: DEFAULT_PROMPT_CONTENTS.reviseXmlPrompt,
+      isDefault: true,
+      label: 'Revise Session (XML Mode)',
+    },
+    reviseTaskDescription: {
+      content: DEFAULT_PROMPT_CONTENTS.reviseTaskDescription,
+      isDefault: true,
+      label: 'Revise Session Task Description',
     },
   },
   promptPreset: 'default',
@@ -254,14 +284,14 @@ export async function initializeSettings(): Promise<void> {
                 ...DEFAULT_SETTINGS,
                 ...previous,
               };
-              delete migrated.stWorldInfoPrompt;
-              delete migrated.usingDefaultStWorldInfoPrompt;
-              delete migrated.lorebookDefinitionPrompt;
-              delete migrated.usingDefaultLorebookDefinitionPrompt;
-              delete migrated.lorebookRulesPrompt;
-              delete migrated.usingDefaultLorebookRulesPrompt;
-              delete migrated.responseRulesPrompt;
-              delete migrated.usingDefaultResponseRulesPrompt;
+              delete (migrated as any).stWorldInfoPrompt;
+              delete (migrated as any).usingDefaultStWorldInfoPrompt;
+              delete (migrated as any).lorebookDefinitionPrompt;
+              delete (migrated as any).usingDefaultLorebookDefinitionPrompt;
+              delete (migrated as any).lorebookRulesPrompt;
+              delete (migrated as any).usingDefaultLorebookRulesPrompt;
+              delete (migrated as any).responseRulesPrompt;
+              delete (migrated as any).usingDefaultResponseRulesPrompt;
 
               return migrated;
             },
@@ -288,6 +318,49 @@ export async function initializeSettings(): Promise<void> {
               } else {
                 // Otherwise, it's a custom prompt, so just mark it as not default.
                 migrated.prompts.taskDescription.isDefault = false;
+              }
+
+              return migrated;
+            },
+          },
+          {
+            from: 'F_1.2',
+            to: 'F_1.3',
+            action(previous: ExtensionSettings): ExtensionSettings {
+              const migrated = { ...previous };
+              migrated.formatVersion = 'F_1.3';
+              migrated.defaultPromptEngineeringMode = 'native';
+
+              // Add new prompt settings for Revise Sessions
+              if (!migrated.prompts) migrated.prompts = {} as any;
+              migrated.prompts.reviseJsonPrompt = {
+                content: DEFAULT_PROMPT_CONTENTS.reviseJsonPrompt,
+                isDefault: true,
+                label: 'Revise Session (JSON Mode)',
+              };
+              migrated.prompts.reviseXmlPrompt = {
+                content: DEFAULT_PROMPT_CONTENTS.reviseXmlPrompt,
+                isDefault: true,
+                label: 'Revise Session (XML Mode)',
+              };
+              migrated.prompts.reviseTaskDescription = {
+                content: DEFAULT_PROMPT_CONTENTS.reviseTaskDescription,
+                isDefault: true,
+                label: 'Revise Session Task Description',
+              };
+
+              // Update templates if they are still the old defaults
+              if (previous.prompts.currentLorebooks.isDefault) {
+                migrated.prompts.currentLorebooks.content = DEFAULT_PROMPT_CONTENTS.currentLorebooks;
+                migrated.prompts.currentLorebooks.isDefault = true;
+              }
+              if (previous.prompts.blackListedEntries.isDefault) {
+                migrated.prompts.blackListedEntries.content = DEFAULT_PROMPT_CONTENTS.blackListedEntries;
+                migrated.prompts.blackListedEntries.isDefault = true;
+              }
+              if (previous.prompts.suggestedLorebooks.isDefault) {
+                migrated.prompts.suggestedLorebooks.content = DEFAULT_PROMPT_CONTENTS.suggestedLorebooks;
+                migrated.prompts.suggestedLorebooks.isDefault = true;
               }
 
               return migrated;

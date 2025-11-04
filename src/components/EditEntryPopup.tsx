@@ -6,7 +6,7 @@ import {
   STTextarea,
   SortableListItemData,
   DropdownItem,
-} from 'sillytavern-utils-lib/components';
+} from 'sillytavern-utils-lib/components/react';
 import { st_runRegexScript } from 'sillytavern-utils-lib/config';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
@@ -106,7 +106,7 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
       }
     }
     setContent(simulatedContent);
-  }, [regexListItems, allRegexes, content]);
+  }, [regexListItems, allRegexes, entry.content]);
 
   const handleRegexSelectionChange = (newIds: string[]) => {
     const newItems = newIds

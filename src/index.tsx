@@ -5,6 +5,7 @@ import { WorldInfoRecommenderSettings } from './components/Settings.js';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import { PopupManager } from './components/PopupManager.js';
 import { initializeCommands } from './commands.js';
+import './styles/main.scss';
 
 const globalContext = SillyTavern.getContext();
 

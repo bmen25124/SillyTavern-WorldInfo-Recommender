@@ -1,11 +1,15 @@
 import { FC, useState, useMemo, useRef } from 'react';
 import showdown from 'showdown';
-import { STButton, Popup, STTextarea } from 'sillytavern-utils-lib/components';
+import { STButton, Popup, STTextarea } from 'sillytavern-utils-lib/components/react';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { CompareEntryPopup } from './CompareEntryPopup.js';
 import { EditEntryPopup, EditEntryPopupRef } from './EditEntryPopup.js';
+import { ReviseSessionManager } from './ReviseSessionManager.js';
+import { Session } from '../generate.js';
+import { ExtensionSettings } from '../settings.js';
+import { ReviseState } from '../revise-types.js';
 
 const converter = new showdown.Converter();
 
@@ -16,6 +20,8 @@ export interface SuggestedEntryProps {
   existingEntry?: WIEntry;
   sessionRegexIds: Record<string, Partial<RegexScriptData>>;
   entriesGroupByWorldName: Record<string, WIEntry[]>;
+  sessionForContext: Session;
+  contextToSend: ExtensionSettings['contextToSend'];
   onAdd: (entry: WIEntry, initialWorldName: string, selectedTargetWorld: string) => void;
   onRemove: (entry: WIEntry, initialWorldName: string, isBlacklist: boolean) => void;
   onContinue: (continueFrom: {
@@ -32,10 +38,6 @@ export interface SuggestedEntryProps {
   ) => void;
 }
 
-/**
- * A component that displays a single suggested World Info entry and provides actions
- * like adding, editing, comparing, or removing it.
- */
 export const SuggestedEntry: FC<SuggestedEntryProps> = ({
   initialWorldName,
   entry,
@@ -47,6 +49,8 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
   onContinue,
   onUpdate,
   entriesGroupByWorldName,
+  sessionForContext,
+  contextToSend,
 }) => {
   const [selectedWorld, setSelectedWorld] = useState(() => {
     const initial = allWorldNames.find((w) => w === initialWorldName);
@@ -57,9 +61,9 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
   const [isRevising, setIsRevising] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
+  const [isReviseSessionManagerOpen, setIsReviseSessionManagerOpen] = useState(false);
   const [updatePrompt, setUpdatePrompt] = useState('');
 
-  // Create a ref to get access to the EditEntryPopup's imperative methods.
   const editPopupRef = useRef<EditEntryPopupRef>(null);
 
   const isUpdate = useMemo(
@@ -86,6 +90,11 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
     setIsRevising(false);
   };
 
+  const handleApplyReviseSession = (newState: ReviseState) => {
+    // In an 'entry' session, newState is a WIEntry.
+    onUpdate(initialWorldName, entry, newState as WIEntry, sessionRegexIds);
+  };
+
   return (
     <>
       <div className="entry">
@@ -103,6 +112,14 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
           </select>
           <STButton onClick={handleAddClick} disabled={isAdding || isActing} className="menu_button interactable add">
             {isUpdate ? 'Update' : 'Add'}
+          </STButton>
+          <STButton
+            onClick={() => setIsReviseSessionManagerOpen(true)}
+            disabled={isActing}
+            className="menu_button interactable"
+            title="Revise this entry with a chat-based AI session."
+          >
+            <i className="fa-solid fa-comments"></i> Revise
           </STButton>
           <STButton
             onClick={handleContinueClick}
@@ -161,31 +178,44 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
         </div>
       </div>
 
-      {/* Conditionally render the Edit Popup */}
       {isEditing && (
         <Popup
           type={POPUP_TYPE.CONFIRM}
           content={<EditEntryPopup ref={editPopupRef} entry={entry} initialRegexIds={sessionRegexIds} />}
           onComplete={(confirmed) => {
-            // This callback runs when the user clicks "OK" or "Cancel".
             if (confirmed && editPopupRef.current) {
-              // If confirmed, use the ref to call the child's exposed function.
               const { updatedEntry, updatedRegexIds } = editPopupRef.current.getFormData();
-              // Pass the retrieved data up to the MainPopup component.
               onUpdate(initialWorldName, entry, updatedEntry, updatedRegexIds);
             }
-            // Always close the popup, regardless of the action.
             setIsEditing(false);
           }}
         />
       )}
 
-      {/* Conditionally render the Compare Popup */}
       {isComparing && existingEntry && (
         <Popup
           type={POPUP_TYPE.DISPLAY}
           content={<CompareEntryPopup originalEntry={existingEntry} newEntry={entry} />}
           onComplete={() => setIsComparing(false)}
+        />
+      )}
+
+      {isReviseSessionManagerOpen && (
+        <Popup
+          type={POPUP_TYPE.DISPLAY}
+          content={
+            <ReviseSessionManager
+              target={{ type: 'entry', worldName: initialWorldName, entry: entry }}
+              initialState={entry}
+              onClose={() => setIsReviseSessionManagerOpen(false)}
+              onApply={handleApplyReviseSession}
+              sessionForContext={sessionForContext}
+              allEntries={entriesGroupByWorldName}
+              contextToSend={contextToSend}
+            />
+          }
+          onComplete={() => setIsReviseSessionManagerOpen(false)}
+          options={{ wide: true, large: true }}
         />
       )}
     </>

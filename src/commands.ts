@@ -1,4 +1,4 @@
-import { BuildPromptOptions, getActiveWorldInfo } from 'sillytavern-utils-lib';
+import { BuildPromptOptions, getWorldInfos } from 'sillytavern-utils-lib';
 import { commonEnumProviders, selected_group, st_echo, this_chid } from 'sillytavern-utils-lib/config';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 
@@ -251,7 +251,7 @@ export function initializeCommands() {
               }
             }
           } else {
-            allWorldInfo = await getActiveWorldInfo(['all'], this_chid);
+            allWorldInfo = await getWorldInfos(['all'], true, this_chid);
           }
 
           const availableWorldNames = Object.keys(allWorldInfo);

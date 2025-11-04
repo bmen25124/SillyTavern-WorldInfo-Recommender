@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
-import { STButton } from 'sillytavern-utils-lib/components';
+import { STButton } from 'sillytavern-utils-lib/components/react';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 
 /**

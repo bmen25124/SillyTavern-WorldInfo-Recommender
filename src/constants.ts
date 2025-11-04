@@ -89,7 +89,8 @@ Content:
 
 Lorebooks are essential for long-term storytelling with AI.`;
 
-export const DEFAULT_CURRENT_LOREBOOKS = `## CURRENT LOREBOOKS
+export const DEFAULT_CURRENT_LOREBOOKS = `{{#is_not_empty currentLorebooks}}
+## CURRENT LOREBOOKS
 {{#each currentLorebooks}}
 ## WORLD NAME: {{@key}}
   {{#each this as |entry|}}
@@ -97,14 +98,18 @@ export const DEFAULT_CURRENT_LOREBOOKS = `## CURRENT LOREBOOKS
 Triggers: {{#if entry.key}}{{join entry.key ', '}}{{else}}*No triggers*{{/if}}
 Content: {{#if entry.content}}{{entry.content}}{{else}}*No content*{{/if}}
   {{/each}}
-{{/each}}`;
+{{/each}}
+{{/is_not_empty}}`;
 
-export const DEFAULT_BLACKLISTED_ENTRIES = `## BLACKLISTED ENTRIES
+export const DEFAULT_BLACKLISTED_ENTRIES = `{{#is_not_empty blackListedEntries}}
+## BLACKLISTED ENTRIES
 {{#each blackListedEntries}}
 - {{this}}
-{{/each}}`;
+{{/each}}
+{{/is_not_empty}}`;
 
-export const DEFAULT_SUGGESTED_LOREBOOKS = `## SUGGESTED LOREBOOKS
+export const DEFAULT_SUGGESTED_LOREBOOKS = `{{#is_not_empty suggestedLorebooks}}
+## SUGGESTED LOREBOOKS
 {{#each suggestedLorebooks}}
 ## WORLD NAME: {{@key}}
   {{#each this as |entry|}}
@@ -112,7 +117,8 @@ export const DEFAULT_SUGGESTED_LOREBOOKS = `## SUGGESTED LOREBOOKS
 Triggers: {{#if entry.key}}{{join entry.key ', '}}{{else}}*No triggers*{{/if}}
 Content: {{#if entry.content}}{{entry.content}}{{else}}*No content*{{/if}}
   {{/each}}
-{{/each}}`;
+{{/each}}
+{{/is_not_empty}}`;
 
 export const DEFAULT_XML_DESCRIPTION = `If you are creating a new entry you should write it like this:
 \`\`\`xml
@@ -145,3 +151,44 @@ export const DEFAULT_TASK_DESCRIPTION = `## Rules
 
 ## Your Task
 {{userInstructions}}{{/if}}`;
+
+export const DEFAULT_REVISE_JSON_PROMPT = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.
+
+**CRITICAL INSTRUCTIONS:**
+1.  You MUST wrap the entire JSON object in a markdown code block (\`\`\`json\n...\n\`\`\`).
+2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
+3.  The JSON object inside the code block MUST be valid and conform to the schema.
+
+**JSON SCHEMA TO FOLLOW:**
+\`\`\`json
+{{schema}}
+\`\`\`
+
+**EXAMPLE OF A PERFECT RESPONSE:**
+\`\`\`json
+{{example_response}}
+\`\`\``;
+
+export const DEFAULT_REVISE_XML_PROMPT = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.
+
+**CRITICAL INSTRUCTIONS:**
+1.  You MUST wrap the entire XML object in a markdown code block (\`\`\`xml\n...\n\`\`\`).
+2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
+3.  The XML object inside the code block MUST be valid.
+
+**JSON SCHEMA TO FOLLOW:**
+\`\`\`json
+{{schema}}
+\`\`\`
+
+**EXAMPLE OF A PERFECT RESPONSE:**
+\`\`\`xml
+{{example_response}}
+\`\`\``;
+
+export const DEFAULT_REVISE_TASK_DESCRIPTION = `You are an expert lorebook writer assisting a user. Your task is to respond with the modified lorebook data in the required structured format.
+Your justification should be friendly and conversational. Be direct and focus on the changes you've made. Vary your responses and do not start every message the same way. Do not repeat the user's request back to them.
+
+For this session, we are focusing on: {{#if isEntrySession}}the entry "{{targetEntryName}}".{{else}}the entire set of lorebook entries provided in the context.{{/if}}
+
+The initial lorebook state is provided in the context. Read the user's request, and provide a response that incorporates their changes.`;

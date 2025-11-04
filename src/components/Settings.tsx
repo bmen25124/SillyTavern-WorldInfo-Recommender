@@ -7,7 +7,7 @@ import {
   STPresetSelect,
   STSortableList,
   STTextarea,
-} from 'sillytavern-utils-lib/components';
+} from 'sillytavern-utils-lib/components/react';
 
 import {
   convertToVariableName,
@@ -59,7 +59,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
   const systemPromptItems = useMemo(
     (): PresetItem[] =>
       Object.keys(settings.prompts).map((key) => {
-        const prompt = settings.prompts[key];
+        const prompt = settings.prompts[key as keyof typeof settings.prompts];
         return {
           value: key,
           label: prompt ? `${prompt.label} (${key})` : key,
@@ -72,7 +72,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
     const preset = settings.mainContextTemplatePresets[settings.mainContextTemplatePreset];
     if (!preset) return [];
     return preset.prompts.map((prompt) => {
-      const promptSetting = settings.prompts[prompt.promptName];
+      const promptSetting = settings.prompts[prompt.promptName as keyof typeof settings.prompts];
       const label = promptSetting ? `${promptSetting.label} (${prompt.promptName})` : prompt.promptName;
       return {
         id: prompt.promptName,
@@ -193,7 +193,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
       s.prompts = {
         ...s.prompts,
         [variableName]: {
-          content: s.prompts[selectedSystemPrompt]?.content ?? '',
+          content: s.prompts[selectedSystemPrompt as keyof typeof s.prompts]?.content ?? '',
           isDefault: false,
           label: value,
         },
@@ -252,7 +252,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
   const handleSystemPromptContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     updateAndRefresh((s) => {
-      const prompt = s.prompts[selectedSystemPrompt];
+      const prompt = s.prompts[selectedSystemPrompt as keyof typeof s.prompts];
       if (prompt) {
         // Create a new prompts object with an updated prompt object.
         s.prompts = {
@@ -270,7 +270,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
   };
 
   const handleRestoreSystemPromptDefault = async () => {
-    const prompt = settings.prompts[selectedSystemPrompt];
+    const prompt = settings.prompts[selectedSystemPrompt as keyof typeof settings.prompts];
     if (!prompt) return st_echo('warning', 'No prompt selected.');
 
     const confirm = await globalContext.Popup.show.confirm('Restore Default', `Restore default for "${prompt.label}"?`);
@@ -280,7 +280,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
         s.prompts = {
           ...s.prompts,
           [selectedSystemPrompt]: {
-            ...s.prompts[selectedSystemPrompt],
+            ...s.prompts[selectedSystemPrompt as keyof typeof s.prompts],
             content: DEFAULT_PROMPT_CONTENTS[selectedSystemPrompt as keyof typeof DEFAULT_PROMPT_CONTENTS],
           },
         };
@@ -299,7 +299,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
     }
   };
 
-  const selectedPromptContent = settings.prompts[selectedSystemPrompt]?.content ?? '';
+  const selectedPromptContent = settings.prompts[selectedSystemPrompt as keyof typeof settings.prompts]?.content ?? '';
   // @ts-ignore
   const isDefaultSystemPromptSelected = SYSTEM_PROMPT_KEYS.includes(selectedSystemPrompt);
 
@@ -352,7 +352,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
           label="Prompt"
           items={systemPromptItems}
           value={selectedSystemPrompt}
-          readOnlyValues={SYSTEM_PROMPT_KEYS}
+          readOnlyValues={SYSTEM_PROMPT_KEYS as string[]}
           onChange={(newValue) => setSelectedSystemPrompt(newValue ?? '')}
           onItemsChange={handleSystemPromptsChange}
           enableCreate

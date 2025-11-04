@@ -6,8 +6,7 @@ import { st_createWorldInfoEntry } from 'sillytavern-utils-lib/config';
 import { ExtensionSettings, MessageRole } from './settings.js';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
 
-// @ts-ignore
-import { Handlebars } from '../../../../../lib.js';
+import * as Handlebars from 'handlebars';
 
 export const globalContext = SillyTavern.getContext();
 
