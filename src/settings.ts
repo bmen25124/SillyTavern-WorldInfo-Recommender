@@ -9,13 +9,16 @@ import {
   DEFAULT_REVISE_JSON_PROMPT,
   DEFAULT_REVISE_XML_PROMPT,
   DEFAULT_REVISE_TASK_DESCRIPTION,
+  DEFAULT_REVISE_GLOBAL_STATE_UPDATE,
+  DEFAULT_REVISE_GLOBAL_STATE_UPDATE_ADDED_MODIFIED,
+  DEFAULT_REVISE_GLOBAL_STATE_UPDATE_REMOVED,
 } from './constants.js';
 import { globalContext } from './generate.js';
 import { st_echo } from 'sillytavern-utils-lib/config';
 
 export const extensionName = 'SillyTavern-WorldInfo-Recommender';
 export const VERSION = '0.2.0';
-export const FORMAT_VERSION = 'F_1.3';
+export const FORMAT_VERSION = 'F_1.4';
 
 export const KEYS = {
   EXTENSION: 'worldInfoRecommender',
@@ -94,7 +97,10 @@ export type SystemPromptKey =
   | 'taskDescription'
   | 'reviseJsonPrompt'
   | 'reviseXmlPrompt'
-  | 'reviseTaskDescription';
+  | 'reviseTaskDescription'
+  | 'reviseGlobalStateUpdate'
+  | 'reviseGlobalStateUpdateAddedModified'
+  | 'reviseGlobalStateUpdateRemoved';
 
 export const SYSTEM_PROMPT_KEYS: Array<SystemPromptKey> = [
   'stDescription',
@@ -106,6 +112,9 @@ export const SYSTEM_PROMPT_KEYS: Array<SystemPromptKey> = [
   'reviseJsonPrompt',
   'reviseXmlPrompt',
   'reviseTaskDescription',
+  'reviseGlobalStateUpdate',
+  'reviseGlobalStateUpdateAddedModified',
+  'reviseGlobalStateUpdateRemoved',
 ];
 
 export const DEFAULT_PROMPT_CONTENTS: Record<SystemPromptKey, string> = {
@@ -118,6 +127,9 @@ export const DEFAULT_PROMPT_CONTENTS: Record<SystemPromptKey, string> = {
   reviseJsonPrompt: DEFAULT_REVISE_JSON_PROMPT,
   reviseXmlPrompt: DEFAULT_REVISE_XML_PROMPT,
   reviseTaskDescription: DEFAULT_REVISE_TASK_DESCRIPTION,
+  reviseGlobalStateUpdate: DEFAULT_REVISE_GLOBAL_STATE_UPDATE,
+  reviseGlobalStateUpdateAddedModified: DEFAULT_REVISE_GLOBAL_STATE_UPDATE_ADDED_MODIFIED,
+  reviseGlobalStateUpdateRemoved: DEFAULT_REVISE_GLOBAL_STATE_UPDATE_REMOVED,
 };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -189,6 +201,21 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       content: DEFAULT_PROMPT_CONTENTS.reviseTaskDescription,
       isDefault: true,
       label: 'Revise Session Task Description',
+    },
+    reviseGlobalStateUpdate: {
+      content: DEFAULT_PROMPT_CONTENTS.reviseGlobalStateUpdate,
+      isDefault: true,
+      label: 'Revise Global State Update (Wrapper)',
+    },
+    reviseGlobalStateUpdateAddedModified: {
+      content: DEFAULT_PROMPT_CONTENTS.reviseGlobalStateUpdateAddedModified,
+      isDefault: true,
+      label: 'Revise Global State (Added/Modified)',
+    },
+    reviseGlobalStateUpdateRemoved: {
+      content: DEFAULT_PROMPT_CONTENTS.reviseGlobalStateUpdateRemoved,
+      isDefault: true,
+      label: 'Revise Global State (Removed)',
     },
   },
   promptPreset: 'default',
@@ -362,6 +389,34 @@ export async function initializeSettings(): Promise<void> {
                 migrated.prompts.suggestedLorebooks.content = DEFAULT_PROMPT_CONTENTS.suggestedLorebooks;
                 migrated.prompts.suggestedLorebooks.isDefault = true;
               }
+
+              return migrated;
+            },
+          },
+          {
+            from: 'F_1.3',
+            to: 'F_1.4',
+            action(previous: ExtensionSettings): ExtensionSettings {
+              const migrated = { ...previous };
+              migrated.formatVersion = 'F_1.4';
+
+              if (!migrated.prompts) migrated.prompts = {} as any;
+
+              migrated.prompts.reviseGlobalStateUpdate = {
+                content: DEFAULT_PROMPT_CONTENTS.reviseGlobalStateUpdate,
+                isDefault: true,
+                label: 'Revise Global State Update (Wrapper)',
+              };
+              migrated.prompts.reviseGlobalStateUpdateAddedModified = {
+                content: DEFAULT_PROMPT_CONTENTS.reviseGlobalStateUpdateAddedModified,
+                isDefault: true,
+                label: 'Revise Global State (Added/Modified)',
+              };
+              migrated.prompts.reviseGlobalStateUpdateRemoved = {
+                content: DEFAULT_PROMPT_CONTENTS.reviseGlobalStateUpdateRemoved,
+                isDefault: true,
+                label: 'Revise Global State (Removed)',
+              };
 
               return migrated;
             },

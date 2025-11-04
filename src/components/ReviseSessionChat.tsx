@@ -178,6 +178,108 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const createAndAddStateUpdateMessage = useCallback(
+    (currentMessages: ReviseMessage[], newState: ReviseState, lastState: ReviseState): ReviseMessage[] => {
+      if (JSON.stringify(lastState) === JSON.stringify(newState)) {
+        return currentMessages;
+      }
+
+      const settings = settingsManager.getSettings();
+      let content = '';
+
+      if (session.type === 'global') {
+        const wrapperTemplate = settings.prompts.reviseGlobalStateUpdate?.content;
+        const addedModifiedTemplate = settings.prompts.reviseGlobalStateUpdateAddedModified?.content;
+        const removedTemplate = settings.prompts.reviseGlobalStateUpdateRemoved?.content;
+        if (!wrapperTemplate || !addedModifiedTemplate || !removedTemplate) return currentMessages;
+
+        const oldState = (lastState as Record<string, WIEntry[]>) || {};
+        const newStateData = (newState as Record<string, WIEntry[]>) || {};
+
+        const oldEntriesMap = new Map<string, WIEntry>();
+        Object.entries(oldState).forEach(([worldName, entries]) => {
+          entries.forEach((entry) => {
+            oldEntriesMap.set(`${worldName}::${entry.uid}`, entry);
+          });
+        });
+
+        const newEntriesMap = new Map<string, WIEntry>();
+        Object.entries(newStateData).forEach(([worldName, entries]) => {
+          entries.forEach((entry) => {
+            newEntriesMap.set(`${worldName}::${entry.uid}`, entry);
+          });
+        });
+
+        const changedLorebooks: Record<string, WIEntry[]> = {}; // For added/modified
+        const removedEntries: { worldName: string; comment: string }[] = [];
+
+        // Find added and modified entries
+        newEntriesMap.forEach((newEntry, key) => {
+          const [worldName] = key.split('::');
+          const oldEntry = oldEntriesMap.get(key);
+
+          let isChanged = false;
+          if (!oldEntry) {
+            isChanged = true; // Added
+          } else {
+            const contentChanged = (newEntry.content || '') !== (oldEntry.content || '');
+            const commentChanged = (newEntry.comment || '') !== (oldEntry.comment || '');
+            const keysChanged = (newEntry.key || []).sort().join(',') !== (oldEntry.key || []).sort().join(',');
+            if (contentChanged || commentChanged || keysChanged) {
+              isChanged = true; // Modified
+            }
+          }
+
+          if (isChanged) {
+            if (!changedLorebooks[worldName]) changedLorebooks[worldName] = [];
+            changedLorebooks[worldName].push(newEntry);
+          }
+        });
+
+        // Find removed entries
+        oldEntriesMap.forEach((oldEntry, key) => {
+          if (!newEntriesMap.has(key)) {
+            const [worldName] = key.split('::');
+            removedEntries.push({ worldName, comment: oldEntry.comment });
+          }
+        });
+
+        if (Object.keys(changedLorebooks).length === 0 && removedEntries.length === 0) {
+          return currentMessages; // No actual changes found
+        }
+
+        const addedModifiedContent = Handlebars.compile(addedModifiedTemplate, { noEscape: true })({
+          changedLorebooks,
+        });
+        const removedContent = Handlebars.compile(removedTemplate, { noEscape: true })({ removedEntries });
+
+        content = Handlebars.compile(wrapperTemplate, { noEscape: true })({
+          addedModifiedContent,
+          removedContent,
+        });
+      } else {
+        // 'entry' type
+        const entry = newState as WIEntry;
+        content = `The following is the current state of the single lorebook entry you are editing. Base your response on this current state.\n\n## WORLD NAME: ${session.worldName}\n### (NAME: ${entry.comment})\nTriggers: ${(entry.key || []).join(', ')}\nContent: ${entry.content}`;
+      }
+
+      content = globalContext.substituteParams(content.trim());
+
+      if (content) {
+        const stateUpdateMessage: ReviseMessage = {
+          id: `msg-${Date.now()}-state`,
+          role: 'system',
+          content: content,
+          isStateUpdate: true,
+        };
+        return [...currentMessages, stateUpdateMessage];
+      }
+
+      return currentMessages;
+    },
+    [session.type, session.worldName],
+  );
+
   const sendRequest = useCallback(
     async (
       messagesToSend: ReviseMessage[],
@@ -284,7 +386,9 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
           stateSnapshot: newSnapshot,
         };
 
-        const finalMessages = [...messagesToSend, assistantMessage];
+        let finalMessages = [...messagesToSend, assistantMessage];
+        finalMessages = createAndAddStateUpdateMessage(finalMessages, newSnapshot, lastState);
+
         setMessages(finalMessages);
         onSessionUpdate({ ...session, messages: finalMessages });
       } catch (error: any) {
@@ -300,7 +404,7 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
         abortControllerRef.current = null;
       }
     },
-    [session, onSessionUpdate, initialState, chatContextOptions],
+    [session, onSessionUpdate, initialState, chatContextOptions, createAndAddStateUpdateMessage],
   );
 
   const handleSendMessage = useCallback(async () => {
@@ -420,6 +524,12 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
   };
 
   const handleSaveStateEdit = (newState: ReviseState) => {
+    const lastState =
+      messages
+        .slice()
+        .reverse()
+        .find((m) => m.stateSnapshot)?.stateSnapshot ?? initialState;
+
     const userEditMessage: ReviseMessage = {
       id: `msg-${Date.now()}-user-edit`,
       role: 'user',
@@ -427,7 +537,9 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
       stateSnapshot: newState,
     };
 
-    const finalMessages = [...messages, userEditMessage];
+    let finalMessages = [...messages, userEditMessage];
+    finalMessages = createAndAddStateUpdateMessage(finalMessages, newState, lastState);
+
     setMessages(finalMessages);
     onSessionUpdate({ ...session, messages: finalMessages });
     setIsEditingState(false);
@@ -439,8 +551,9 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
       .reverse()
       .find((m) => m.stateSnapshot)?.stateSnapshot ?? initialState;
 
-  const initialMsgs = messages.filter((m) => m.isInitial);
-  const chatMsgs = messages.filter((m) => !m.isInitial);
+  const visibleMessages = messages.filter((m) => !m.isStateUpdate);
+  const initialMsgs = visibleMessages.filter((m) => m.isInitial);
+  const chatMsgs = visibleMessages.filter((m) => !m.isInitial);
 
   return (
     <div className="revise-session-chat">

@@ -58,6 +58,7 @@ export interface ReviseMessage extends Message {
   id: string;
   isInitial?: boolean;
   stateSnapshot?: ReviseState;
+  isStateUpdate?: boolean;
 }
 
 export interface ReviseSession {

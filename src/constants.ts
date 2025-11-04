@@ -192,3 +192,27 @@ Your justification should be friendly and conversational. Be direct and focus on
 For this session, we are focusing on: {{#if isEntrySession}}the entry "{{targetEntryName}}".{{else}}the entire set of lorebook entries provided in the context.{{/if}}
 
 The initial lorebook state is provided in the context. Read the user's request, and provide a response that incorporates their changes.`;
+
+export const DEFAULT_REVISE_GLOBAL_STATE_UPDATE_ADDED_MODIFIED = `{{#is_not_empty changedLorebooks}}
+## LOREBOOK UPDATES (Added/Modified)
+{{#each changedLorebooks}}
+## WORLD NAME: {{@key}}
+  {{#each this as |entry|}}
+### (NAME: {{#if entry.comment}}{{entry.comment}}{{else}}*No name*{{/if}}) (ID: {{entry.uid}})
+Triggers: {{#if entry.key}}{{join entry.key ', '}}{{else}}*No triggers*{{/if}}
+Content: {{#if entry.content}}{{entry.content}}{{else}}*No content*{{/if}}
+  {{/each}}
+{{/each}}
+{{/is_not_empty}}`;
+
+export const DEFAULT_REVISE_GLOBAL_STATE_UPDATE_REMOVED = `{{#is_not_empty removedEntries}}
+## LOREBOOK UPDATES (Removed)
+The following entries were removed and will no longer be part of the context:
+{{#each removedEntries}}
+- **{{this.comment}}** (from {{this.worldName}})
+{{/each}}
+{{/is_not_empty}}`;
+
+export const DEFAULT_REVISE_GLOBAL_STATE_UPDATE = `The following changes were applied to the lorebooks based on the last turn. Unlisted entries are unchanged.
+{{{addedModifiedContent}}}
+{{{removedContent}}}`;
