@@ -25732,7 +25732,7 @@ async function hk(n, r, s, i, u, c, f) {
     };
   }
   for (const _ of p.prompts) {
-    if (!_.enabled || ["taskDescription", "responseRules", "currentLorebooks"].includes(_.promptName) || sn === void 0 && !Ft && _.promptName === "chatHistory") continue;
+    if (!_.enabled || ["taskDescription", "responseRules", "currentLorebooks"].includes(_.promptName) || _.promptName === "chatHistory" && u.messages.type === "none" || sn === void 0 && !Ft && _.promptName === "chatHistory") continue;
     if (_.promptName === "chatHistory") {
       b.push({
         id: Df,
