@@ -62,6 +62,7 @@ export async function buildInitialReviseMessages(
     if (!block.enabled) continue;
 
     if (['taskDescription', 'responseRules', 'currentLorebooks'].includes(block.promptName)) continue;
+    if (block.promptName === 'chatHistory' && contextToSend.messages.type === 'none') continue;
     if (this_chid === undefined && !selected_group && block.promptName === 'chatHistory') continue;
 
     if (block.promptName === 'chatHistory') {
