@@ -75,4 +75,5 @@ export interface ReviseSession {
   };
   profileId: string;
   promptEngineeringMode: PromptEngineeringMode;
+  isReadonly?: boolean;
 }

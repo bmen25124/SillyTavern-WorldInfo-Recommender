@@ -17,7 +17,7 @@ import {
   REVISE_SCHEMA_NAME,
   CHAT_HISTORY_PLACEHOLDER_ID,
 } from '../revise-types.js';
-import { makeStructuredRequest } from '../request.js';
+import { makePlainRequest, makeStructuredRequest } from '../request.js';
 import { settingsManager, PromptEngineeringMode } from '../settings.js';
 import { st_echo, st_createWorldInfoEntry, selected_group, this_chid } from 'sillytavern-utils-lib/config';
 import { CompareStatePopup } from './CompareStatePopup.js';
@@ -354,48 +354,67 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
           }
         }
 
-        let newSnapshot: ReviseState;
-        let justification: string;
-
-        if (session.type === 'entry') {
-          const response = await makeStructuredRequest(
+        if (session.isReadonly) {
+          const responseContent = await makePlainRequest(
             session.profileId,
             finalMessagesForRequest,
-            EntryRevisionResponseSchema,
-            REVISE_SCHEMA_NAME.ENTRY,
-            session.promptEngineeringMode,
             settings.maxResponseToken,
             abortControllerRef.current.signal,
           );
-          newSnapshot = calculateNewState(lastState as WIEntry, response);
-          justification = response.justification;
+
+          const assistantMessage: ReviseMessage = {
+            id: `msg-${Date.now()}-ai`,
+            role: 'assistant',
+            content: responseContent,
+          };
+
+          const finalMessages = [...messagesToSend, assistantMessage];
+          setMessages(finalMessages);
+          onSessionUpdate({ ...session, messages: finalMessages });
         } else {
-          // 'global'
-          const response = await makeStructuredRequest(
-            session.profileId,
-            finalMessagesForRequest,
-            GlobalRevisionResponseSchema,
-            REVISE_SCHEMA_NAME.GLOBAL,
-            session.promptEngineeringMode,
-            settings.maxResponseToken,
-            abortControllerRef.current.signal,
-          );
-          newSnapshot = calculateNewGlobalState(lastState as Record<string, WIEntry[]>, response);
-          justification = response.justification;
+          let newSnapshot: ReviseState;
+          let justification: string;
+
+          if (session.type === 'entry') {
+            const response = await makeStructuredRequest(
+              session.profileId,
+              finalMessagesForRequest,
+              EntryRevisionResponseSchema,
+              REVISE_SCHEMA_NAME.ENTRY,
+              session.promptEngineeringMode,
+              settings.maxResponseToken,
+              abortControllerRef.current.signal,
+            );
+            newSnapshot = calculateNewState(lastState as WIEntry, response);
+            justification = response.justification;
+          } else {
+            // 'global'
+            const response = await makeStructuredRequest(
+              session.profileId,
+              finalMessagesForRequest,
+              GlobalRevisionResponseSchema,
+              REVISE_SCHEMA_NAME.GLOBAL,
+              session.promptEngineeringMode,
+              settings.maxResponseToken,
+              abortControllerRef.current.signal,
+            );
+            newSnapshot = calculateNewGlobalState(lastState as Record<string, WIEntry[]>, response);
+            justification = response.justification;
+          }
+
+          const assistantMessage: ReviseMessage = {
+            id: `msg-${Date.now()}-ai`,
+            role: 'assistant',
+            content: justification,
+            stateSnapshot: newSnapshot,
+          };
+
+          let finalMessages = [...messagesToSend, assistantMessage];
+          finalMessages = createAndAddStateUpdateMessage(finalMessages, newSnapshot, lastState);
+
+          setMessages(finalMessages);
+          onSessionUpdate({ ...session, messages: finalMessages });
         }
-
-        const assistantMessage: ReviseMessage = {
-          id: `msg-${Date.now()}-ai`,
-          role: 'assistant',
-          content: justification,
-          stateSnapshot: newSnapshot,
-        };
-
-        let finalMessages = [...messagesToSend, assistantMessage];
-        finalMessages = createAndAddStateUpdateMessage(finalMessages, newSnapshot, lastState);
-
-        setMessages(finalMessages);
-        onSessionUpdate({ ...session, messages: finalMessages });
       } catch (error: any) {
         if (error.name === 'AbortError') {
           st_echo('info', 'Request was cancelled.');
@@ -576,6 +595,14 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
       <div className="popup_header">
         <h2>{session.name}</h2>
         <div className="popup_header_buttons">
+          <label className="checkbox_label">
+            <input
+              type="checkbox"
+              checked={session.isReadonly ?? false}
+              onChange={(e) => onSessionUpdate({ ...session, isReadonly: e.target.checked })}
+            />
+            Readonly Mode
+          </label>
           <STConnectionProfileSelect
             initialSelectedProfileId={session.profileId}
             onChange={(p) => onSessionUpdate({ ...session, profileId: p?.id ?? '' })}
@@ -587,6 +614,7 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
               onSessionUpdate({ ...session, promptEngineeringMode: e.target.value as PromptEngineeringMode })
             }
             title="Prompt Engineering Mode"
+            disabled={session.isReadonly}
           >
             <option value="native">Native</option>
             <option value="json">JSON</option>

@@ -103,6 +103,7 @@ export const ReviseSessionManager: FC<ReviseSessionManagerProps> = ({
         context: { mainContextTemplatePreset: currentSettings.mainContextTemplatePreset },
         profileId: currentSettings.profileId,
         promptEngineeringMode: currentSettings.defaultPromptEngineeringMode,
+        isReadonly: false,
       };
 
       setActiveSession(newSession);
