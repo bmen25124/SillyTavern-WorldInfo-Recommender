@@ -25397,6 +25397,11 @@ Content: ${fe.content}`;
           re.push(fe), we && re.push(we);
         }
         if (n.isReadonly) {
+          re.push({
+            id: `msg-${Date.now()}-readonly`,
+            role: "system",
+            content: "Readonly mode enabled. You can only discuss with the user without making changes."
+          });
           const fe = await ik(
             n.profileId,
             re,
