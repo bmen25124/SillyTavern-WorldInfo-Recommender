@@ -369,6 +369,7 @@ dialog:has(.select-entries-popup) {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 /* Revise Session Styles */

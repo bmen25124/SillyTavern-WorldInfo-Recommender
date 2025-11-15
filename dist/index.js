@@ -25538,13 +25538,13 @@ Content: ${fe.content}`;
           ),
           "Readonly Mode"
         ] }),
-        /* @__PURE__ */ N.jsx(
+        /* @__PURE__ */ N.jsx("div", { style: { maxWidth: "200px" }, children: /* @__PURE__ */ N.jsx(
           My,
           {
             initialSelectedProfileId: n.profileId,
             onChange: (V) => i({ ...n, profileId: V?.id ?? "" })
           }
-        ),
+        ) }),
         /* @__PURE__ */ N.jsxs(
           "select",
           {
@@ -25553,6 +25553,7 @@ Content: ${fe.content}`;
             onChange: (V) => i({ ...n, promptEngineeringMode: V.target.value }),
             title: "Prompt Engineering Mode",
             disabled: n.isReadonly,
+            style: { minWidth: "fit-content", width: "unset" },
             children: [
               /* @__PURE__ */ N.jsx("option", { value: "native", children: "Native" }),
               /* @__PURE__ */ N.jsx("option", { value: "json", children: "JSON" }),

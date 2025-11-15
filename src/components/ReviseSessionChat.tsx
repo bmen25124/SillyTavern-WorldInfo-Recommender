@@ -603,10 +603,12 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
             />
             Readonly Mode
           </label>
-          <STConnectionProfileSelect
-            initialSelectedProfileId={session.profileId}
-            onChange={(p) => onSessionUpdate({ ...session, profileId: p?.id ?? '' })}
-          />
+          <div style={{ maxWidth: '200px' }}>
+            <STConnectionProfileSelect
+              initialSelectedProfileId={session.profileId}
+              onChange={(p) => onSessionUpdate({ ...session, profileId: p?.id ?? '' })}
+            />
+          </div>
           <select
             className="text_pole"
             value={session.promptEngineeringMode}
@@ -615,6 +617,7 @@ export const ReviseSessionChat: FC<ReviseSessionChatProps> = ({
             }
             title="Prompt Engineering Mode"
             disabled={session.isReadonly}
+            style={{ minWidth: 'fit-content', width: 'unset' }}
           >
             <option value="native">Native</option>
             <option value="json">JSON</option>
