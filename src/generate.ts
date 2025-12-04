@@ -129,6 +129,7 @@ export async function runWorldInfoRecommendation({
         continue;
       }
 
+      // @ts-ignore
       const prompt = promptSettings[mainContext.promptName];
       if (!prompt) {
         continue;

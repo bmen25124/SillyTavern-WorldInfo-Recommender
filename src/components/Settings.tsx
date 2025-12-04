@@ -153,6 +153,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
 
       // Rebuild the prompts list from newItems
       newKeys.forEach((key) => {
+        // @ts-ignore
         newPrompts[key] = oldPrompts[key] ?? { content: '', isDefault: false, label: key };
       });
 
@@ -183,6 +184,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
       st_echo('error', `Invalid prompt name: ${value}`);
       return { confirmed: false };
     }
+    // @ts-ignore
     if (settings.prompts[variableName]) {
       st_echo('error', `Prompt name already exists: ${variableName}`);
       return { confirmed: false };
@@ -220,6 +222,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
       st_echo('error', `Invalid prompt name: ${newValue}`);
       return { confirmed: false };
     }
+    // @ts-ignore
     if (settings.prompts[variableName]) {
       st_echo('error', `Prompt name already exists: ${variableName}`);
       return { confirmed: false };
@@ -227,6 +230,7 @@ export const WorldInfoRecommenderSettings: FC = () => {
 
     updateAndRefresh((s) => {
       // Create a new prompts object by removing the old key and adding the new one.
+      // @ts-ignore
       const { [oldValue]: renamedPrompt, ...restPrompts } = s.prompts;
       // @ts-ignore
       s.prompts = {

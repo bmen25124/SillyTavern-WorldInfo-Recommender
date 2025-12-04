@@ -80,7 +80,12 @@ export interface ExtensionSettings {
     suggestedLorebooks: PromptSetting;
     responseRules: PromptSetting;
     taskDescription: PromptSetting;
-    [key: string]: PromptSetting;
+    reviseJsonPrompt: PromptSetting;
+    reviseXmlPrompt: PromptSetting;
+    reviseTaskDescription: PromptSetting;
+    reviseGlobalStateUpdate: PromptSetting;
+    reviseGlobalStateUpdateAddedModified: PromptSetting;
+    reviseGlobalStateUpdateRemoved: PromptSetting;
   };
   promptPreset: string;
   promptPresets: Record<string, PromptPreset>;
