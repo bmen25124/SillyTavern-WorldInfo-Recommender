@@ -5,7 +5,7 @@ import { st_echo } from 'sillytavern-utils-lib/config';
 import { PromptEngineeringMode, settingsManager } from './settings.js';
 import * as Handlebars from 'handlebars';
 import { schemaToExample } from './schema-to-example.js';
-import { parseXMLOwn } from './xml.js';
+import { parseResponse } from './parsers.js';
 
 const generator = new Generator();
 
@@ -120,9 +120,8 @@ export async function makeStructuredRequest<T extends z.ZodType<any, any, any>>(
     const format = promptEngineeringMode as 'json' | 'xml';
     const example = schemaToExample(jsonSchema, format);
     const schemaString = JSON.stringify(jsonSchema, null, 2);
-    // This assumes revise prompts are added to settings, which needs to be done.
     const promptTemplateKey = format === 'json' ? 'reviseJsonPrompt' : 'reviseXmlPrompt';
-    const promptTemplate = settings.prompts[promptTemplateKey as keyof typeof settings.prompts]?.content;
+    const promptTemplate = settings.prompts[promptTemplateKey]?.content;
 
     if (!promptTemplate) {
       throw new Error(`Prompt template for mode "${format}" not found.`);
@@ -149,27 +148,7 @@ export async function makeStructuredRequest<T extends z.ZodType<any, any, any>>(
       throw new Error(`Structured request for ${schemaName} failed to return content.`);
     }
 
-    // For XML, the parser returns a different structure than JSON
-    if (format === 'xml') {
-      const parsedXml = parseXMLOwn(response.content as string);
-      // We expect the root to be the schema name, but the AI might just return the fields.
-      // And the parser might wrap it in a 'lorebooks' tag.
-      const entries = Object.values(parsedXml).flat();
-      if (entries.length > 0) {
-        // Zod schema expects specific keys, let's remap from the parsed XML
-        const firstEntry = entries[0];
-        parsedContent = {
-          justification: 'Updated via XML.', // Justification is hard with XML parsing this way
-          name: firstEntry.comment,
-          triggers: firstEntry.key,
-          content: firstEntry.content,
-        };
-      } else {
-        throw new Error('Could not find a valid entry in the XML response.');
-      }
-    } else {
-      parsedContent = JSON.parse(response.content as string);
-    }
+    parsedContent = parseResponse(response.content as string, format, { schema: jsonSchema });
   }
 
   const validationResult = schema.safeParse(parsedContent);

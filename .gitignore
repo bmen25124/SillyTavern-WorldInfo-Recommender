@@ -14,3 +14,4 @@ scripts/temp/
 __pycache__
 repomix-output.xml
 dist/assets
+repomix.config.json

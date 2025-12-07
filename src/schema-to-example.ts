@@ -42,7 +42,7 @@ export function schemaToExample(schema: any, format: 'json' | 'xml'): string {
   const example = generateExample(schema);
   if (format === 'xml') {
     // Create a root element for the XML example
-    return `<entry>\n${jsonToXmlFragment(example, 1)}</entry>`;
+    return `<root>\n${jsonToXmlFragment(example, 1)}</root>`;
   }
   return JSON.stringify(example, null, 2);
 }
