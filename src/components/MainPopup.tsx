@@ -30,6 +30,7 @@ import { useForceUpdate } from '../hooks/useForceUpdate.js';
 import { SelectEntriesPopup, SelectEntriesPopupRef } from './SelectEntriesPopup.js';
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { ReviseSessionManager } from './ReviseSessionManager.js';
+import { getEntryKeys, normalizeEntry } from '../entry-utils.js';
 
 if (!Handlebars.helpers['join']) {
   Handlebars.registerHelper('join', function (array: any, separator: any) {
@@ -61,6 +62,48 @@ if (!Handlebars.helpers['is_not_empty']) {
 const globalContext = SillyTavern.getContext();
 
 const getAvatar = () => (this_chid ? st_getCharaFilename(this_chid) : selected_group);
+
+function applyEntryToWorldInfoCopy(
+  entry: WIEntry,
+  selectedWorldName: string,
+  worldInfoCopy: Record<string, WIEntry[]>,
+): 'added' | 'updated' | 'unchanged' {
+  const normalizedEntry = normalizeEntry(entry);
+  if (!worldInfoCopy[selectedWorldName]) {
+    worldInfoCopy[selectedWorldName] = [];
+  }
+
+  const worldEntries = worldInfoCopy[selectedWorldName];
+  const existingEntry = worldEntries.find((e) => e.uid === normalizedEntry.uid);
+  const isUpdate = !!existingEntry;
+  let targetEntry: WIEntry;
+
+  if (isUpdate) {
+    const contentChanged = (normalizedEntry.content || '') !== (existingEntry!.content || '');
+    const commentChanged = (normalizedEntry.comment || '') !== (existingEntry!.comment || '');
+    const keysChanged =
+      getEntryKeys(normalizedEntry).slice().sort().join(',') !== getEntryKeys(existingEntry).slice().sort().join(',');
+
+    if (!contentChanged && !commentChanged && !keysChanged) {
+      return 'unchanged';
+    }
+    targetEntry = existingEntry!;
+  } else {
+    const stFormat = { entries: Object.fromEntries(worldEntries.map((e) => [e.uid, e])) };
+    const newEntry = st_createWorldInfoEntry(selectedWorldName, stFormat);
+    if (!newEntry) throw new Error('Failed to create new World Info entry.');
+    targetEntry = newEntry;
+    worldEntries.push(targetEntry);
+  }
+
+  Object.assign(targetEntry, {
+    key: normalizedEntry.key,
+    content: normalizedEntry.content,
+    comment: normalizedEntry.comment,
+  });
+
+  return isUpdate ? 'updated' : 'added';
+}
 
 export const MainPopup: FC = () => {
   const forceUpdate = useForceUpdate();
@@ -201,34 +244,7 @@ export const MainPopup: FC = () => {
       skipSave: boolean = false,
     ): Promise<'added' | 'updated' | 'unchanged'> => {
       const worldInfoCopy = structuredClone(entriesGroupByWorldName);
-      if (!worldInfoCopy[selectedWorldName]) {
-        worldInfoCopy[selectedWorldName] = [];
-      }
-
-      const existingEntry = worldInfoCopy[selectedWorldName].find((e) => e.uid === entry.uid);
-      const isUpdate = !!existingEntry;
-      let targetEntry: WIEntry;
-
-      if (isUpdate) {
-        // This is an update. Check if anything actually changed.
-        const contentChanged = (entry.content || '') !== (existingEntry!.content || '');
-        const commentChanged = (entry.comment || '') !== (existingEntry!.comment || '');
-        const keysChanged =
-          (entry.key || []).slice().sort().join(',') !== (existingEntry!.key || []).slice().sort().join(',');
-
-        if (!contentChanged && !commentChanged && !keysChanged) {
-          return 'unchanged'; // Nothing to do.
-        }
-        targetEntry = existingEntry!;
-      } else {
-        const stFormat = { entries: Object.fromEntries(worldInfoCopy[selectedWorldName].map((e) => [e.uid, e])) };
-        const newEntry = st_createWorldInfoEntry(selectedWorldName, stFormat);
-        if (!newEntry) throw new Error('Failed to create new World Info entry.');
-        targetEntry = newEntry;
-        worldInfoCopy[selectedWorldName].push(targetEntry);
-      }
-
-      Object.assign(targetEntry, { key: entry.key, content: entry.content, comment: entry.comment });
+      const status = applyEntryToWorldInfoCopy(entry, selectedWorldName, worldInfoCopy);
       setEntriesGroupByWorldName(worldInfoCopy);
 
       if (!skipSave) {
@@ -237,7 +253,7 @@ export const MainPopup: FC = () => {
         globalContext.reloadWorldInfoEditor(selectedWorldName, true);
       }
 
-      return isUpdate ? 'updated' : 'added';
+      return status;
     },
     [entriesGroupByWorldName],
   );
@@ -418,6 +434,7 @@ export const MainPopup: FC = () => {
     let unchangedCount = 0;
     const modifiedWorlds = new Set<string>();
     const entriesToAdd: { worldName: string; entry: WIEntry }[] = [];
+    const worldInfoCopy = structuredClone(entriesGroupByWorldName);
 
     Object.entries(session.suggestedEntries).forEach(([worldName, entries]) => {
       entries.forEach((entry) => {
@@ -428,7 +445,7 @@ export const MainPopup: FC = () => {
 
     for (const { worldName, entry } of entriesToAdd) {
       try {
-        const status = await addEntry(entry, worldName, true);
+        const status = applyEntryToWorldInfoCopy(entry, worldName, worldInfoCopy);
         if (status === 'added') addedCount++;
         else if (status === 'updated') updatedCount++;
         else unchangedCount++;
@@ -443,7 +460,7 @@ export const MainPopup: FC = () => {
 
     for (const worldName of modifiedWorlds) {
       try {
-        const finalFormat = { entries: Object.fromEntries(entriesGroupByWorldName[worldName].map((e) => [e.uid, e])) };
+        const finalFormat = { entries: Object.fromEntries(worldInfoCopy[worldName].map((e) => [e.uid, e])) };
         await globalContext.saveWorldInfo(worldName, finalFormat);
         globalContext.reloadWorldInfoEditor(worldName, true);
       } catch (error) {
@@ -451,6 +468,7 @@ export const MainPopup: FC = () => {
       }
     }
 
+    setEntriesGroupByWorldName(worldInfoCopy);
     setSession((prev) => ({ ...prev, suggestedEntries: {} }));
     st_echo('success', `Processed: ${addedCount} new, ${updatedCount} updated, ${unchangedCount} unchanged.`);
     setIsGenerating(false);
