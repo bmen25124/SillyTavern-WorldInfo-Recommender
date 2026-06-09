@@ -31,6 +31,7 @@ import { SelectEntriesPopup, SelectEntriesPopupRef } from './SelectEntriesPopup.
 import { POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { ReviseSessionManager } from './ReviseSessionManager.js';
 import { getEntryKeys, normalizeEntry } from '../entry-utils.js';
+import { loadMainSession, saveMainSession } from '../main-session-storage.js';
 
 if (!Handlebars.helpers['join']) {
   Handlebars.registerHelper('join', function (array: any, separator: any) {
@@ -137,9 +138,8 @@ export const MainPopup: FC = () => {
       setGroupMembers([]);
 
       const avatar = getAvatar();
-      const key = `worldInfoRecommend_${avatarKey}`;
 
-      const savedSession: Partial<Session> = JSON.parse(localStorage.getItem(key) ?? '{}');
+      const savedSession = (await loadMainSession(avatarKey)).session;
       const initialSession: Session = {
         suggestedEntries: savedSession.suggestedEntries ?? {},
         blackListedEntries: savedSession.blackListedEntries ?? [],
@@ -218,8 +218,12 @@ export const MainPopup: FC = () => {
 
   useEffect(() => {
     if (isLoading) return;
-    const key = `worldInfoRecommend_${avatarKey}`;
-    localStorage.setItem(key, JSON.stringify(session));
+    saveMainSession(avatarKey, session).then((result) => {
+      if (!result.persisted) {
+        console.warn('Failed to save World Info Recommender session:', result.error);
+        st_echo('warning', 'World Info Recommender session could not be saved. Browser storage may be full.');
+      }
+    });
   }, [session, avatarKey, isLoading]);
 
   const updateSetting = <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => {
