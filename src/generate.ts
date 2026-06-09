@@ -5,6 +5,7 @@ import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 import { st_createWorldInfoEntry } from 'sillytavern-utils-lib/config';
 import { ExtensionSettings, MessageRole } from './settings.js';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
+import { getEntryKeys, normalizeEntry } from './entry-utils.js';
 
 import * as Handlebars from 'handlebars';
 
@@ -198,19 +199,17 @@ export async function runWorldInfoRecommendation({
       return;
     }
     entries.forEach((entry) => {
+      Object.assign(entry, normalizeEntry(entry));
       const existentWI = entriesGroupByWorldName[worldName]?.find((e) => e.uid === entry.uid);
       if (existentWI) {
-        if (entry.key.length === 0) {
-          entry.key = existentWI.key;
+        if (getEntryKeys(entry).length === 0) {
+          entry.key = getEntryKeys(existentWI);
         }
         if (!entry.comment) {
           entry.comment = existentWI.comment;
         }
       }
-      // Ensure comment is at least an empty string if somehow still missing
-      if (entry.comment === null || entry.comment === undefined) {
-        entry.comment = '';
-      }
+      Object.assign(entry, normalizeEntry(entry));
     });
   });
 
@@ -271,9 +270,10 @@ export function prepareEntryModification(
   }
 
   // Update entry properties from the suggestion
-  targetEntry.key = entry.key;
-  targetEntry.content = entry.content;
-  targetEntry.comment = entry.comment;
+  const normalizedEntry = normalizeEntry(entry);
+  targetEntry.key = normalizedEntry.key;
+  targetEntry.content = normalizedEntry.content;
+  targetEntry.comment = normalizedEntry.comment;
   // Optionally update other fields if the AI could suggest them, e.g.,
   // targetEntry.scan_depth = entry.scan_depth ?? targetEntry.scan_depth;
   // targetEntry.selective = entry.selective ?? targetEntry.selective;

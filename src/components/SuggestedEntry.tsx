@@ -10,6 +10,7 @@ import { ReviseSessionManager } from './ReviseSessionManager.js';
 import { Session } from '../generate.js';
 import { ExtensionSettings } from '../settings.js';
 import { ReviseState } from '../revise-types.js';
+import { getEntryKeys, normalizeEntry } from '../entry-utils.js';
 
 const converter = new showdown.Converter();
 
@@ -92,7 +93,7 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
 
   const handleApplyReviseSession = (newState: ReviseState) => {
     // In an 'entry' session, newState is a WIEntry.
-    onUpdate(initialWorldName, entry, newState as WIEntry, sessionRegexIds);
+    onUpdate(initialWorldName, entry, normalizeEntry(newState as WIEntry), sessionRegexIds);
   };
 
   return (
@@ -165,7 +166,7 @@ export const SuggestedEntry: FC<SuggestedEntryProps> = ({
           </STButton>
         </div>
         <h4 className="comment">{entry.comment}</h4>
-        <div className="key">{entry.key.join(', ')}</div>
+        <div className="key">{getEntryKeys(entry).join(', ')}</div>
         <p className="content" dangerouslySetInnerHTML={{ __html: converter.makeHtml(entry.content ?? '') }}></p>
         <div className="continue-prompt-section" style={{ marginTop: '10px' }}>
           <STTextarea

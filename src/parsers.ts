@@ -1,5 +1,6 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { getEntryKeys } from './entry-utils.js';
 
 const xmlParser = new XMLParser({
   ignoreAttributes: true,
@@ -178,7 +179,7 @@ export function getPrefilled(worldName: string, entry: WIEntry, format: 'xml' | 
     <worldName>${worldName}</worldName>
     <id>${entry.uid}</id>
     <name>${entry.comment}</name>
-    <triggers>${entry.key.join(',')}</triggers>
+    <triggers>${getEntryKeys(entry).join(',')}</triggers>
     <content>${entry.content}`;
     case 'json':
       return JSON.stringify(
@@ -212,7 +213,7 @@ export function getFull(worldName: string, entry: WIEntry, format: 'xml' | 'json
     <worldName>${worldName}</worldName>
     <id>${entry.uid}</id>
     <name>${entry.comment}</name>
-    <triggers>${entry.key.join(',')}</triggers>
+    <triggers>${getEntryKeys(entry).join(',')}</triggers>
     <content>${entry.content}</content>
   </entry>
 </lorebooks>`;

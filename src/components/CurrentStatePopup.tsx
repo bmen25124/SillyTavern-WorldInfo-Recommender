@@ -1,6 +1,7 @@
 import { FC, useMemo, useState } from 'react';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 import { CompareStatePopup } from './CompareStatePopup.js';
+import { getEntryKeys } from '../entry-utils.js';
 
 interface CurrentStatePopupProps {
   currentState: WIEntry;
@@ -13,7 +14,7 @@ export const CurrentStatePopup: FC<CurrentStatePopupProps> = ({ currentState, in
   const fields = useMemo(
     () => [
       { label: 'Name', value: currentState.comment },
-      { label: 'Triggers', value: currentState.key.join(', ') },
+      { label: 'Triggers', value: getEntryKeys(currentState).join(', ') },
       { label: 'Content', value: currentState.content },
     ],
     [currentState],

@@ -27,15 +27,16 @@ import { BuildPromptOptions, buildPrompt } from 'sillytavern-utils-lib';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
 import { GlobalStatePopup } from './GlobalStatePopup.js';
 import * as Handlebars from 'handlebars';
+import { getEntryKeys, normalizeEntry } from '../entry-utils.js';
 
 const globalContext = SillyTavern.getContext();
 
 const calculateNewState = (prevState: WIEntry, response: EntryRevisionResponse): WIEntry => {
   const newState = structuredClone(prevState);
   newState.comment = response.name;
-  newState.key = response.triggers;
+  newState.key = Array.isArray(response.triggers) ? response.triggers : getEntryKeys(prevState);
   newState.content = response.content;
-  return newState;
+  return normalizeEntry(newState);
 };
 
 const calculateNewGlobalState = (
@@ -61,8 +62,9 @@ const calculateNewGlobalState = (
       const entryToChange = newState[worldName]?.find((e) => e.comment === originalName);
       if (entryToChange) {
         if (op.newName !== undefined) entryToChange.comment = op.newName;
-        if (op.triggers !== undefined) entryToChange.key = op.triggers;
+        if (op.triggers !== undefined) entryToChange.key = Array.isArray(op.triggers) ? op.triggers : [];
         if (op.content !== undefined) entryToChange.content = op.content;
+        Object.assign(entryToChange, normalizeEntry(entryToChange));
       } else {
         console.warn(`[WREC] Could not find entry to change: "${originalName}" in world "${worldName}"`);
         st_echo('warning', `Could not find entry to change: "${originalName}" in world "${worldName}"`);
@@ -81,9 +83,9 @@ const calculateNewGlobalState = (
       const newEntry = st_createWorldInfoEntry(worldName, stFormat);
       if (newEntry) {
         newEntry.comment = name;
-        newEntry.key = triggers;
+        newEntry.key = Array.isArray(triggers) ? triggers : [];
         newEntry.content = content;
-        newState[worldName].push(newEntry);
+        newState[worldName].push(normalizeEntry(newEntry));
       }
     }
   }
@@ -99,7 +101,7 @@ const EditStatePopup: FC<{
   onClose: () => void;
 }> = ({ initialState, onSave, onClose }) => {
   const [name, setName] = useState(initialState.comment);
-  const [triggers, setTriggers] = useState(initialState.key.join(', '));
+  const [triggers, setTriggers] = useState(getEntryKeys(initialState).join(', '));
   const [content, setContent] = useState(initialState.content);
 
   const handleSave = () => {

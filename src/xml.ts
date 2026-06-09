@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { getEntryKeys } from './entry-utils.js';
 
 const parser = new XMLParser();
 
@@ -74,7 +75,7 @@ export function getPrefilledXML(worldName: string, entry: WIEntry): string {
     <worldName>${worldName}</worldName>
     <id>${entry.uid}</id>
     <name>${entry.comment}</name>
-    <triggers>${entry.key.join(',')}</triggers>
+    <triggers>${getEntryKeys(entry).join(',')}</triggers>
     <content>${entry.content}`;
 }
 
@@ -85,7 +86,7 @@ export function getFullXML(worldName: string, entry: WIEntry): string {
     <worldName>${worldName}</worldName>
     <id>${entry.uid}</id>
     <name>${entry.comment}</name>
-    <triggers>${entry.key.join(',')}</triggers>
+    <triggers>${getEntryKeys(entry).join(',')}</triggers>
     <content>${entry.content}</content>
   </entry>
 </lorebooks>`;

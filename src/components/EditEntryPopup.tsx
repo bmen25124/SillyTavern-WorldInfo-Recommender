@@ -10,6 +10,7 @@ import {
 import { st_runRegexScript } from 'sillytavern-utils-lib/config';
 import { RegexScriptData } from 'sillytavern-utils-lib/types/regex';
 import { WIEntry } from 'sillytavern-utils-lib/types/world-info';
+import { getEntryKeys } from '../entry-utils.js';
 
 const globalContext = SillyTavern.getContext();
 
@@ -41,7 +42,7 @@ export const EditEntryPopup = forwardRef<EditEntryPopupRef, EditEntryPopupProps>
   // --- Internal State Management ---
   const [allRegexes, setAllRegexes] = useState<RegexScriptData[]>([]);
   const [title, setTitle] = useState(entry.comment);
-  const [keywords, setKeywords] = useState(entry.key.join(', '));
+  const [keywords, setKeywords] = useState(getEntryKeys(entry).join(', '));
   const [content, setContent] = useState(entry.content);
   const [regexListItems, setRegexListItems] = useState<SortableListItemData[]>([]);
 

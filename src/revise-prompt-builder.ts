@@ -4,6 +4,7 @@ import { ReviseMessage, CHAT_HISTORY_PLACEHOLDER_ID, ReviseSessionType } from '.
 import { ExtensionSettings, settingsManager } from './settings.js';
 import { globalContext, Session } from './generate.js';
 import { selected_group, this_chid } from 'sillytavern-utils-lib/config';
+import { getEntryKeys } from './entry-utils.js';
 
 export async function buildInitialReviseMessages(
   initialState: WIEntry | Record<string, WIEntry[]>,
@@ -53,7 +54,7 @@ export async function buildInitialReviseMessages(
     templateData['entryToRevise'] = {
       worldName: worldName,
       name: entryToRevise.comment,
-      triggers: entryToRevise.key.join(', '),
+      triggers: getEntryKeys(entryToRevise).join(', '),
       content: entryToRevise.content,
     };
   }
