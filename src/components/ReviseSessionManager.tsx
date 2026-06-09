@@ -8,9 +8,9 @@ import { buildInitialReviseMessages } from '../revise-prompt-builder.js';
 import { st_echo, selected_group, this_chid } from 'sillytavern-utils-lib/config';
 import { BuildPromptOptions } from 'sillytavern-utils-lib';
 import { Session } from '../generate.js';
+import { loadReviseSessions, saveReviseSessions } from '../revise-session-storage.js';
 
 const globalContext = SillyTavern.getContext();
-const REVISE_SESSIONS_KEY = 'worldInfoRecommender_reviseSessions';
 
 interface ReviseSessionManagerProps {
   target: { type: 'global' } | { type: 'entry'; worldName: string; entry: WIEntry };
@@ -45,9 +45,29 @@ export const ReviseSessionManager: FC<ReviseSessionManagerProps> = ({
   }, [target]);
 
   useEffect(() => {
-    const sessionsFromStorage: ReviseSession[] = JSON.parse(localStorage.getItem(REVISE_SESSIONS_KEY) || '[]');
-    setAllSessions(sessionsFromStorage);
-    setIsLoading(false);
+    let isMounted = true;
+
+    loadReviseSessions()
+      .then(({ sessions, recovered }) => {
+        if (!isMounted) return;
+        setAllSessions(sessions);
+        if (recovered) {
+          st_echo('warning', 'Some saved revise sessions were invalid and have been reset.');
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load revise sessions:', error);
+        st_echo('warning', 'Saved revise sessions could not be loaded.');
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const filteredSessions = useMemo(() => {
@@ -62,8 +82,16 @@ export const ReviseSessionManager: FC<ReviseSessionManagerProps> = ({
   }, [allSessions, target.type, targetIdentifier]);
 
   const saveAllSessions = (updatedSessions: ReviseSession[]) => {
-    localStorage.setItem(REVISE_SESSIONS_KEY, JSON.stringify(updatedSessions));
     setAllSessions(updatedSessions);
+    saveReviseSessions(updatedSessions).then((result) => {
+      if (!result.persisted) {
+        console.warn('Failed to save revise sessions:', result.error);
+        st_echo(
+          'warning',
+          'Revise response was applied, but session history could not be saved. Delete old revise sessions to free browser storage.',
+        );
+      }
+    });
   };
 
   const handleCreateNewSession = async () => {

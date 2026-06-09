@@ -15,6 +15,7 @@ import {
 } from './constants.js';
 import { globalContext } from './generate.js';
 import { st_echo } from 'sillytavern-utils-lib/config';
+import { migrateReviseSessionsStorage } from './revise-session-storage.js';
 
 export const extensionName = 'SillyTavern-WorldInfo-Recommender';
 export const VERSION = '0.2.0';
@@ -428,7 +429,19 @@ export async function initializeSettings(): Promise<void> {
           },
         ],
       })
-      .then((_result) => {
+      .then(async (_result) => {
+        try {
+          const migration = await migrateReviseSessionsStorage();
+          if (migration.migrated) {
+            console.info(`[${extensionName}] Migrated revise sessions to IndexedDB storage.`);
+          }
+          if (migration.recovered) {
+            st_echo('warning', `[${extensionName}] Some saved revise sessions were invalid and have been reset.`);
+          }
+        } catch (error) {
+          console.error(`[${extensionName}] Failed to migrate revise session storage:`, error);
+          st_echo('warning', `[${extensionName}] Saved revise sessions could not be migrated to IndexedDB.`);
+        }
         resolve();
       })
       .catch((error) => {
