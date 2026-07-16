@@ -6,6 +6,7 @@ import { PromptEngineeringMode, settingsManager } from './settings.js';
 import * as Handlebars from 'handlebars';
 import { schemaToExample } from './schema-to-example.js';
 import { parseResponse } from './parsers.js';
+import { normalizeMessageRoles } from './message-roles.js';
 
 const generator = new Generator();
 
@@ -33,7 +34,7 @@ async function makeRequest(
     generator.generateRequest(
       {
         profileId,
-        prompt,
+        prompt: normalizeMessageRoles(prompt),
         maxTokens,
         custom: { stream, signal: combinedSignal },
         overridePayload,
@@ -135,14 +136,17 @@ export async function makeStructuredRequest<T extends z.ZodType<any, any, any>>(
     const resolvedPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })(templateContext);
     const instructionMessage: Message = { role: 'system', content: resolvedPrompt };
 
-    response = await makeRequest(
-      profileId,
-      [...baseMessages, instructionMessage],
-      maxResponseToken,
-      {},
-      undefined,
-      signal,
-    );
+    const messagesWithInstruction = [...baseMessages];
+    if (messagesWithInstruction.length > 0 && messagesWithInstruction[0].role === 'system') {
+      messagesWithInstruction[0] = {
+        ...messagesWithInstruction[0],
+        content: `${messagesWithInstruction[0].content}\n\n${resolvedPrompt}`,
+      };
+    } else {
+      messagesWithInstruction.unshift(instructionMessage);
+    }
+
+    response = await makeRequest(profileId, messagesWithInstruction, maxResponseToken, {}, undefined, signal);
 
     if (!response?.content) {
       throw new Error(`Structured request for ${schemaName} failed to return content.`);
